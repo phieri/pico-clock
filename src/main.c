@@ -7,14 +7,20 @@
 #include "pico/time.h"
 #include "pico/cyw43_arch.h"
 
-#include "lwip/sockets.h"
+#include "lwip/udp.h"
+#include "lwip/ip4_addr.h"
 #include "lwip/inet.h"
+#include "lwip/pbuf.h"
 
 #define NTP_SERVER_IP "216.239.35.0"
 #define NTP_SERVER_PORT 123
 #define NTP_SYNC_INTERVAL_MS (30u * 60u * 1000u)
+#ifndef WIFI_SSID_DEFAULT
 #define WIFI_SSID_DEFAULT ""
+#endif
+#ifndef WIFI_PASSWORD_DEFAULT
 #define WIFI_PASSWORD_DEFAULT ""
+#endif
 #define WIFI_CONNECT_TIMEOUT_MS 30000u
 
 typedef struct {
@@ -43,6 +49,23 @@ typedef struct __attribute__((packed)) {
     uint32_t tx_tm_f;
 } ntp_packet_t;
 
+typedef struct {
+    bool received;
+    uint8_t payload[48];
+    uint16_t length;
+} ntp_receive_state_t;
+
+static void ntp_udp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port) {
+    ntp_receive_state_t *state = (ntp_receive_state_t *)arg;
+    if (!state || !p) {
+        return;
+    }
+
+    state->length = pbuf_copy_partial(p, state->payload, sizeof(state->payload), 0);
+    state->received = true;
+    pbuf_free(p);
+}
+
 static void clock_init(clock_state_t *state) {
     memset(state, 0, sizeof(*state));
 }
@@ -57,11 +80,7 @@ static bool wifi_connect(void) {
         return false;
     }
 
-    if (cyw43_arch_enable_sta_mode()) {
-        printf("sta mode failed\n");
-        cyw43_arch_deinit();
-        return false;
-    }
+    cyw43_arch_enable_sta_mode();
 
     if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID_DEFAULT, WIFI_PASSWORD_DEFAULT,
                                            CYW43_AUTH_OPEN, WIFI_CONNECT_TIMEOUT_MS)) {
@@ -75,48 +94,70 @@ static bool wifi_connect(void) {
 }
 
 static bool ntp_sync(clock_state_t *state) {
-    if (!cyw43_arch_wifi_is_connected()) {
+    ntp_receive_state_t receive_state = {0};
+    struct udp_pcb *pcb = udp_new();
+    if (!pcb) {
+        printf("udp pcb create failed\n");
         return false;
     }
 
-    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock < 0) {
-        printf("socket create failed\n");
+    if (udp_bind(pcb, IP_ADDR_ANY, 0) != ERR_OK) {
+        printf("udp bind failed\n");
+        udp_remove(pcb);
         return false;
     }
 
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_len = sizeof(addr);
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(NTP_SERVER_PORT);
-    addr.sin_addr.s_addr = inet_addr(NTP_SERVER_IP);
+    udp_recv(pcb, ntp_udp_recv, &receive_state);
 
     uint8_t packet[48] = {0};
     packet[0] = 0x1b;
 
-    cyw43_arch_lwip_begin();
-    int sent = sendto(sock, packet, sizeof(packet), 0, (struct sockaddr *)&addr, sizeof(addr));
-    cyw43_arch_lwip_end();
-    if (sent < 0) {
-        printf("ntp send failed\n");
-        close(sock);
+    struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, sizeof(packet), PBUF_RAM);
+    if (!p) {
+        printf("pbuf alloc failed\n");
+        udp_remove(pcb);
+        return false;
+    }
+
+    if (pbuf_take(p, packet, sizeof(packet)) != ERR_OK) {
+        printf("pbuf take failed\n");
+        pbuf_free(p);
+        udp_remove(pcb);
+        return false;
+    }
+
+    ip4_addr_t server_addr;
+    if (!ip4addr_aton(NTP_SERVER_IP, &server_addr)) {
+        printf("ntp server address invalid\n");
+        pbuf_free(p);
+        udp_remove(pcb);
         return false;
     }
 
     cyw43_arch_lwip_begin();
-    struct timeval timeout = {.tv_sec = 5, .tv_usec = 0};
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-    int received = recvfrom(sock, packet, sizeof(packet), 0, NULL, NULL);
+    err_t err = udp_sendto(pcb, p, &server_addr, NTP_SERVER_PORT);
     cyw43_arch_lwip_end();
-    close(sock);
+    if (err != ERR_OK) {
+        printf("ntp send failed\n");
+        pbuf_free(p);
+        udp_remove(pcb);
+        return false;
+    }
 
-    if (received < 0) {
+    uint32_t deadline = clock_now_ms() + 5000u;
+    while (!receive_state.received && (clock_now_ms() < deadline)) {
+        cyw43_arch_poll();
+        sleep_ms(10);
+    }
+
+    udp_remove(pcb);
+
+    if (!receive_state.received) {
         printf("ntp receive failed\n");
         return false;
     }
 
-    ntp_packet_t *ntp = (ntp_packet_t *)packet;
+    ntp_packet_t *ntp = (ntp_packet_t *)receive_state.payload;
     uint32_t ntp_seconds = ntohl(ntp->tx_tm_s);
     uint32_t unix_seconds = ntp_seconds - 2208988800UL;
     uint32_t now = clock_now_ms();
@@ -159,11 +200,13 @@ static void clock_format_hms(uint64_t epoch_seconds, char *buffer, size_t size) 
 int main(void) {
     stdio_init_all();
     clock_state_t clock;
+    bool wifi_ready = false;
     clock_init(&clock);
 
     while (true) {
-        if (!cyw43_arch_wifi_is_connected()) {
-            if (!wifi_connect()) {
+        if (!wifi_ready) {
+            wifi_ready = wifi_connect();
+            if (!wifi_ready) {
                 sleep_ms(5000);
                 continue;
             }
