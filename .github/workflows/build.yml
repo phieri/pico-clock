@@ -1,0 +1,30 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi git cmake make
+
+      - name: Bootstrap Pico SDK
+        run: |
+          chmod +x scripts/bootstrap-pico.sh
+          ./scripts/bootstrap-pico.sh
+
+      - name: Configure build
+        run: |
+          cmake -S . -B build -DPICO_SDK_PATH=$GITHUB_WORKSPACE/.deps/pico-sdk
+
+      - name: Build firmware
+        run: |
+          cmake --build build -j2
