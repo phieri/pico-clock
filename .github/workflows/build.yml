@@ -55,6 +55,9 @@ jobs:
       - name: Set Pico SDK path
         run: echo "PICO_SDK_PATH=${{ github.workspace }}/pico-sdk" >> $GITHUB_ENV
 
+      - name: Bootstrap build dependencies
+        run: bash ./scripts/bootstrap-pico.sh
+
       - name: Create build directory
         run: mkdir -p build
 
