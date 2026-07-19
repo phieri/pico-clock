@@ -26,6 +26,7 @@ pico_sdk_init()
 add_executable(pico_clock
   src/main.c
   src/clock.c
+  src/display.c
   src/network.c
 )
 
