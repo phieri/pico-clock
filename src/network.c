@@ -6,6 +6,8 @@
 #include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
 
+#include "cpr_compat.h"
+
 #include "lwip/inet.h"
 #include "lwip/ip4_addr.h"
 #include "lwip/pbuf.h"
@@ -20,6 +22,7 @@
 #define WIFI_PASSWORD_DEFAULT ""
 #endif
 #define WIFI_CONNECT_TIMEOUT_MS 30000u
+#define CAPTIVE_PORTAL_URL "http://networkcheck.kde.org/"
 
 typedef struct __attribute__((packed)) {
     uint8_t li_vn_mode;
@@ -56,7 +59,29 @@ static void ntp_udp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const i
     pbuf_free(p);
 }
 
+static bool captive_portal_check(void) {
+    cpr_response_t response = cpr_get(CAPTIVE_PORTAL_URL);
+    bool success = cpr_is_successful(&response);
+    if (success) {
+        printf("captive portal probe succeeded with HTTP %ld\n", response.status_code);
+    } else {
+        printf("captive portal probe failed with HTTP %ld\n", response.status_code);
+    }
+    cpr_response_free(&response);
+    return success;
+}
+
 bool wifi_connect(void) {
+    if (WIFI_SSID_DEFAULT[0] == '\0') {
+        printf("wifi ssid not configured\n");
+        return false;
+    }
+
+    if (WIFI_PASSWORD_DEFAULT[0] != '\0') {
+        printf("password-protected Wi-Fi networks are not supported; only open Wi-Fi is supported\n");
+        return false;
+    }
+
     if (cyw43_arch_init()) {
         printf("cyw43 init failed\n");
         return false;
@@ -64,14 +89,20 @@ bool wifi_connect(void) {
 
     cyw43_arch_enable_sta_mode();
 
-    if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID_DEFAULT, WIFI_PASSWORD_DEFAULT,
-                                            CYW43_AUTH_OPEN, WIFI_CONNECT_TIMEOUT_MS)) {
+    if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID_DEFAULT, "", CYW43_AUTH_OPEN,
+                                            WIFI_CONNECT_TIMEOUT_MS)) {
         printf("wifi connect failed\n");
         cyw43_arch_deinit();
         return false;
     }
 
     printf("wifi connected\n");
+    if (!captive_portal_check()) {
+        printf("captive portal probe failed; delaying reconnect\n");
+        cyw43_arch_deinit();
+        return false;
+    }
+
     return true;
 }
 

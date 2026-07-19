@@ -29,6 +29,7 @@ add_executable(pico_clock
   src/main.c
   src/clock.c
   src/display.c
+  src/cpr_compat.c
   src/network.c
 )
 
