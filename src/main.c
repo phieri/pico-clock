@@ -11,6 +11,49 @@
 
 #define NTP_SYNC_INTERVAL_MS (30u * 60u * 1000u)
 #define SERIAL_BUFFER_SIZE 160u
+#define CLOCK_REFRESH_INTERVAL_MS 1000u
+
+static bool process_serial_input(pico_config_t *config, bool *config_dirty, char *serial_buffer, size_t *serial_length) {
+    int ch = getchar_timeout_us(0);
+    if (ch == PICO_ERROR_TIMEOUT) {
+        return false;
+    }
+
+    if (ch == '\r' || ch == '\n') {
+        if (*serial_length == 0u) {
+            return false;
+        }
+
+        serial_buffer[*serial_length] = '\0';
+        char response[96];
+        if (config_handle_command(config, serial_buffer, response, sizeof(response))) {
+            if (!config_save(config)) {
+                printf("config save failed\n");
+            }
+            printf("%s\n", response);
+            *config_dirty = true;
+        } else {
+            printf("%s\n", response);
+        }
+        *serial_length = 0u;
+        return true;
+    }
+
+    if (*serial_length < (SERIAL_BUFFER_SIZE - 1u)) {
+        serial_buffer[(*serial_length)++] = (char)ch;
+    }
+    return false;
+}
+
+static void refresh_clock_display(const clock_state_t *clock, const pico_config_t *config, display_framebuffer_t *display) {
+    uint32_t now = clock_now_ms();
+    uint64_t epoch = clock_current_epoch_seconds(clock, now);
+    char time_buffer[16];
+    int32_t timezone_offset_seconds = config->timezone_set ? config->timezone_offset_seconds : 0;
+    clock_format_hms(epoch, timezone_offset_seconds, time_buffer, sizeof(time_buffer));
+    display_draw_time(display, time_buffer, (long)clock->drift_ms,
+                      config->clock_colour_set ? config->clock_colour : 0xFFu);
+}
 
 int main(void) {
     stdio_init_all();
@@ -20,7 +63,7 @@ int main(void) {
     bool wifi_ready = false;
     bool config_dirty = false;
     char serial_buffer[SERIAL_BUFFER_SIZE];
-    size_t serial_length = 0;
+    size_t serial_length = 0u;
 
     clock_init(&clock);
     display_init(&display);
@@ -30,27 +73,7 @@ int main(void) {
     }
 
     while (true) {
-        int ch = getchar_timeout_us(0);
-        if (ch != PICO_ERROR_TIMEOUT) {
-            if (ch == '\r' || ch == '\n') {
-                if (serial_length > 0) {
-                    serial_buffer[serial_length] = '\0';
-                    char response[96];
-                    if (config_handle_command(&config, serial_buffer, response, sizeof(response))) {
-                        if (!config_save(&config)) {
-                            printf("config save failed\n");
-                        }
-                        printf("%s\n", response);
-                        config_dirty = true;
-                    } else {
-                        printf("%s\n", response);
-                    }
-                    serial_length = 0;
-                }
-            } else if (serial_length < (SERIAL_BUFFER_SIZE - 1u)) {
-                serial_buffer[serial_length++] = (char)ch;
-            }
-        }
+        process_serial_input(&config, &config_dirty, serial_buffer, &serial_length);
 
         if (config_dirty) {
             config_dirty = false;
@@ -69,13 +92,8 @@ int main(void) {
             ntp_sync(&clock, &config);
         }
 
-        uint32_t now = clock_now_ms();
-        uint64_t epoch = clock_current_epoch_seconds(&clock, now);
-        char time_buffer[16];
-        int32_t timezone_offset_seconds = config.timezone_set ? config.timezone_offset_seconds : 0;
-        clock_format_hms(epoch, timezone_offset_seconds, time_buffer, sizeof(time_buffer));
-        display_draw_time(&display, time_buffer, (long)clock.drift_ms, config.clock_colour_set ? config.clock_colour : 0xFFu);
-        sleep_ms(1000);
+        refresh_clock_display(&clock, &config, &display);
+        sleep_ms(CLOCK_REFRESH_INTERVAL_MS);
     }
 
     return 0;

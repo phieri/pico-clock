@@ -96,8 +96,56 @@ static void copy_string(char *dst, size_t dst_size, const char *src) {
     dst[len] = '\0';
 }
 
+static void config_apply_defaults(pico_config_t *config) {
+    if (config == NULL) {
+        return;
+    }
+
+    memset(config, 0, sizeof(*config));
+    config->clock_colour = 0xFFu;
+    config->wifi_ssid[0] = '\0';
+    config->wifi_password[0] = '\0';
+    config->ntp_server[0] = '\0';
+    copy_string(config->ntp_server, sizeof(config->ntp_server), "2001:4860:4860::8888,216.239.35.0");
+}
+
+static void config_load_persisted(const persisted_config_t *persisted, pico_config_t *config) {
+    if (persisted == NULL || config == NULL) {
+        return;
+    }
+
+    config->timezone_set = persisted->timezone_set != 0;
+    config->timezone_offset_seconds = persisted->timezone_offset_seconds;
+    config->clock_colour_set = persisted->clock_colour_set != 0;
+    config->clock_colour = persisted->clock_colour;
+    config->wifi_configured = persisted->wifi_configured != 0;
+    copy_string(config->wifi_ssid, sizeof(config->wifi_ssid), persisted->wifi_ssid);
+    copy_string(config->wifi_password, sizeof(config->wifi_password), persisted->wifi_password);
+    config->ntp_server_set = persisted->ntp_server_set != 0;
+    copy_string(config->ntp_server, sizeof(config->ntp_server), persisted->ntp_server);
+}
+
+static void config_store_persisted(const pico_config_t *config, persisted_config_t *persisted) {
+    if (persisted == NULL || config == NULL) {
+        return;
+    }
+
+    memset(persisted, 0, sizeof(*persisted));
+    persisted->magic = CONFIG_MAGIC;
+    persisted->version = CONFIG_VERSION;
+    persisted->timezone_offset_seconds = config->timezone_set ? config->timezone_offset_seconds : 0;
+    persisted->timezone_set = config->timezone_set ? 1u : 0u;
+    persisted->clock_colour = config->clock_colour_set ? config->clock_colour : 0xFFu;
+    persisted->clock_colour_set = config->clock_colour_set ? 1u : 0u;
+    persisted->wifi_configured = config->wifi_configured ? 1u : 0u;
+    copy_string(persisted->wifi_ssid, sizeof(persisted->wifi_ssid), config->wifi_ssid);
+    copy_string(persisted->wifi_password, sizeof(persisted->wifi_password), config->wifi_password);
+    persisted->ntp_server_set = config->ntp_server_set ? 1u : 0u;
+    copy_string(persisted->ntp_server, sizeof(persisted->ntp_server), config->ntp_server);
+}
+
 static bool parse_timezone_offset(const char *text, int32_t *offset_seconds) {
-    if (text == NULL || *text == '\0') {
+    if (text == NULL || *text == '\0' || offset_seconds == NULL) {
         return false;
     }
 
@@ -118,8 +166,9 @@ static bool parse_timezone_offset(const char *text, int32_t *offset_seconds) {
     }
 
     if (*end == ':' && end[1] != '\0') {
-        long minutes = strtol(end + 1, &end, 10);
-        if (end == (end - 1) || *end != '\0') {
+        char *minute_end = NULL;
+        long minutes = strtol(end + 1, &minute_end, 10);
+        if (minute_end == (end + 1) || *minute_end != '\0') {
             return false;
         }
         if (hours < 0) {
@@ -189,16 +238,7 @@ static bool config_prepare_filesystem(void) {
 }
 
 void config_init(pico_config_t *config) {
-    if (config == NULL) {
-        return;
-    }
-
-    memset(config, 0, sizeof(*config));
-    config->clock_colour = 0xFFu;
-    config->wifi_ssid[0] = '\0';
-    config->wifi_password[0] = '\0';
-    config->ntp_server[0] = '\0';
-    copy_string(config->ntp_server, sizeof(config->ntp_server), "2001:4860:4860::8888,216.239.35.0");
+    config_apply_defaults(config);
 }
 
 bool config_load(pico_config_t *config) {
@@ -230,15 +270,7 @@ bool config_load(pico_config_t *config) {
         return true;
     }
 
-    config->timezone_set = persisted.timezone_set != 0;
-    config->timezone_offset_seconds = persisted.timezone_offset_seconds;
-    config->clock_colour_set = persisted.clock_colour_set != 0;
-    config->clock_colour = persisted.clock_colour;
-    config->wifi_configured = persisted.wifi_configured != 0;
-    copy_string(config->wifi_ssid, sizeof(config->wifi_ssid), persisted.wifi_ssid);
-    copy_string(config->wifi_password, sizeof(config->wifi_password), persisted.wifi_password);
-    config->ntp_server_set = persisted.ntp_server_set != 0;
-    copy_string(config->ntp_server, sizeof(config->ntp_server), persisted.ntp_server);
+    config_load_persisted(&persisted, config);
     return true;
 }
 
@@ -258,18 +290,7 @@ bool config_save(const pico_config_t *config) {
     }
 
     persisted_config_t persisted;
-    memset(&persisted, 0, sizeof(persisted));
-    persisted.magic = CONFIG_MAGIC;
-    persisted.version = CONFIG_VERSION;
-    persisted.timezone_offset_seconds = config->timezone_set ? config->timezone_offset_seconds : 0;
-    persisted.timezone_set = config->timezone_set ? 1u : 0u;
-    persisted.clock_colour = config->clock_colour_set ? config->clock_colour : 0xFFu;
-    persisted.clock_colour_set = config->clock_colour_set ? 1u : 0u;
-    persisted.wifi_configured = config->wifi_configured ? 1u : 0u;
-    copy_string(persisted.wifi_ssid, sizeof(persisted.wifi_ssid), config->wifi_ssid);
-    copy_string(persisted.wifi_password, sizeof(persisted.wifi_password), config->wifi_password);
-    persisted.ntp_server_set = config->ntp_server_set ? 1u : 0u;
-    copy_string(persisted.ntp_server, sizeof(persisted.ntp_server), config->ntp_server);
+    config_store_persisted(config, &persisted);
 
     err = lfs_file_write(&g_lfs, &file, &persisted, sizeof(persisted));
     if (err < 0) {
@@ -283,30 +304,18 @@ bool config_save(const pico_config_t *config) {
 }
 
 void config_reset(pico_config_t *config) {
-    if (config == NULL) {
-        return;
-    }
-
-    memset(config, 0, sizeof(*config));
-    config->clock_colour = 0xFFu;
-    config->ntp_server[0] = '\0';
-    copy_string(config->ntp_server, sizeof(config->ntp_server), "2001:4860:4860::8888,216.239.35.0");
+    config_apply_defaults(config);
 }
 
-bool config_handle_command(pico_config_t *config, const char *line, char *response, size_t response_size) {
-    if (config == NULL || line == NULL || response == NULL || response_size == 0) {
+static bool config_parse_command(const char *line, char *command, size_t command_size, char *value, size_t value_size) {
+    if (line == NULL || command == NULL || value == NULL || command_size == 0u || value_size == 0u) {
         return false;
     }
 
-    char command[32];
-    char value[128];
+    char work[160];
     char *cursor = NULL;
     char *token = NULL;
 
-    memset(command, 0, sizeof(command));
-    memset(value, 0, sizeof(value));
-
-    char work[160];
     strlcpy(work, line, sizeof(work));
     cursor = work;
     while (*cursor == ' ' || *cursor == '\t') {
@@ -322,8 +331,57 @@ bool config_handle_command(pico_config_t *config, const char *line, char *respon
     while (*cursor == ' ' || *cursor == '\t') {
         ++cursor;
     }
-    strlcpy(command, token, sizeof(command));
-    strlcpy(value, cursor, sizeof(value));
+
+    copy_string(command, command_size, token);
+    copy_string(value, value_size, cursor);
+    return true;
+}
+
+static bool config_handle_wifi_command(pico_config_t *config, const char *value, char *response, size_t response_size) {
+    char ssid[33];
+    char password[64];
+    char *ssid_ptr = NULL;
+    char *password_ptr = NULL;
+
+    memset(ssid, 0, sizeof(ssid));
+    memset(password, 0, sizeof(password));
+
+    char work[160];
+    strlcpy(work, value, sizeof(work));
+    ssid_ptr = strtok(work, " ");
+    if (ssid_ptr == NULL || *ssid_ptr == '\0') {
+        snprintf(response, response_size, "wifi unset");
+        config->wifi_configured = false;
+        return true;
+    }
+
+    password_ptr = strtok(NULL, " ");
+    copy_string(ssid, sizeof(ssid), ssid_ptr);
+    if (password_ptr != NULL) {
+        copy_string(password, sizeof(password), password_ptr);
+    }
+
+    config->wifi_configured = true;
+    copy_string(config->wifi_ssid, sizeof(config->wifi_ssid), ssid);
+    copy_string(config->wifi_password, sizeof(config->wifi_password), password);
+    snprintf(response, response_size, "wifi configured for %s", ssid);
+    return true;
+}
+
+bool config_handle_command(pico_config_t *config, const char *line, char *response, size_t response_size) {
+    if (config == NULL || line == NULL || response == NULL || response_size == 0) {
+        return false;
+    }
+
+    char command[32];
+    char value[128];
+    memset(command, 0, sizeof(command));
+    memset(value, 0, sizeof(value));
+
+    if (!config_parse_command(line, command, sizeof(command), value, sizeof(value))) {
+        snprintf(response, response_size, "unknown command");
+        return false;
+    }
 
     char command_lower[32];
     lowercase_copy(command_lower, sizeof(command_lower), command);
@@ -362,28 +420,7 @@ bool config_handle_command(pico_config_t *config, const char *line, char *respon
     }
 
     if (strcmp(command_lower, "wifi") == 0) {
-        char ssid[33];
-        char password[64];
-        memset(ssid, 0, sizeof(ssid));
-        memset(password, 0, sizeof(password));
-
-        char *ssid_ptr = strtok(cursor, " ");
-        if (ssid_ptr == NULL || *ssid_ptr == '\0') {
-            snprintf(response, response_size, "wifi unset");
-            config->wifi_configured = false;
-            return true;
-        }
-        copy_string(ssid, sizeof(ssid), ssid_ptr);
-        char *password_ptr = strtok(NULL, " ");
-        if (password_ptr != NULL) {
-            copy_string(password, sizeof(password), password_ptr);
-        }
-
-        config->wifi_configured = true;
-        copy_string(config->wifi_ssid, sizeof(config->wifi_ssid), ssid);
-        copy_string(config->wifi_password, sizeof(config->wifi_password), password);
-        snprintf(response, response_size, "wifi configured for %s", ssid);
-        return true;
+        return config_handle_wifi_command(config, value, response, response_size);
     }
 
     if (strcmp(command_lower, "ntp") == 0) {
