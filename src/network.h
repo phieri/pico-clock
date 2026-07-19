@@ -4,8 +4,9 @@
 #include <stdbool.h>
 
 #include "clock.h"
+#include "config.h"
 
-bool wifi_connect(void);
-bool ntp_sync(clock_state_t *state);
+bool wifi_connect(const pico_config_t *config);
+bool ntp_sync(clock_state_t *state, const pico_config_t *config);
 
 #endif
