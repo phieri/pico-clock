@@ -1,11 +1,12 @@
 # pico-clock
 
-A Raspberry Pi Pico 2 W firmware scaffold for a network clock that uses Wi-Fi, synchronizes from NTP at boot, tracks drift, and formats the current time as HH:mm:ss.
+A Raspberry Pi Pico 2 W firmware scaffold for a network clock that uses open Wi-Fi, probes the captive-portal check URL, synchronizes from NTP at boot, tracks drift, and formats the current time as HH:mm:ss.
 
 ## What is included
 - CMake-based Pico SDK project targeting `pico2_w`
 - Wi-Fi connection setup for the Pico W using the Raspberry Pi CYW43 driver
 - A simple NTP client that requests the current time from an NTP server at boot
+- An HTTP probe against http://networkcheck.kde.org/ that validates open Wi-Fi connectivity and rejects password-protected networks
 - Drift tracking based on boot-time sync and subsequent corrections
 - A framebuffer-based display loop that draws the current time and drift on a 1024x600 display surface
 
@@ -18,4 +19,4 @@ A Raspberry Pi Pico 2 W firmware scaffold for a network clock that uses Wi-Fi, s
    - `cmake --build build -j2`
 
 ## Notes
-The initial scaffold uses the Pico W's wireless stack and an NTP sync loop. To connect to a real network, update the Wi-Fi SSID and password defaults in `src/main.c` before flashing the firmware to hardware.
+The initial scaffold uses the Pico W's wireless stack and an NTP sync loop. To connect to a real network, update the Wi-Fi SSID default in `src/main.c` before flashing the firmware to hardware. Password-protected networks are intentionally unsupported; the firmware only autoconnects to open Wi-Fi and verifies connectivity by probing `http://networkcheck.kde.org/`.
