@@ -110,7 +110,7 @@ void display_draw_text(display_framebuffer_t *framebuffer, int x, int y, const c
     }
 }
 
-void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buffer, long drift_ms) {
+void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buffer, long drift_ms, uint8_t colour) {
     const int title_scale = 4;
     const int detail_scale = 3;
     const int title_y = 120;
@@ -119,12 +119,12 @@ void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buff
     display_draw_rect(framebuffer, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, 0x00u);
     display_draw_rect(framebuffer, 40, 40, DISPLAY_WIDTH - 80, DISPLAY_HEIGHT - 80, 0x00u);
 
-    display_draw_text(framebuffer, 140, title_y, time_buffer, title_scale, 0xFFu);
+    display_draw_text(framebuffer, 140, title_y, time_buffer, title_scale, colour);
     char drift_buffer[32];
     int written = snprintf(drift_buffer, sizeof(drift_buffer), "DRIFT=%ldMS", drift_ms);
     if (written < 0) {
         drift_buffer[0] = '\0';
     }
 
-    display_draw_text(framebuffer, 140, detail_y, drift_buffer, detail_scale, 0xFFu);
+    display_draw_text(framebuffer, 140, detail_y, drift_buffer, detail_scale, colour);
 }

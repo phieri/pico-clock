@@ -24,8 +24,13 @@ uint64_t clock_current_epoch_seconds(const clock_state_t *state, uint32_t now) {
     return (uint64_t)adjusted_seconds;
 }
 
-void clock_format_hms(uint64_t epoch_seconds, char *buffer, size_t size) {
-    uint32_t seconds = (uint32_t)(epoch_seconds % 86400u);
+void clock_format_hms(uint64_t epoch_seconds, int32_t timezone_offset_seconds, char *buffer, size_t size) {
+    int64_t adjusted_seconds = (int64_t)epoch_seconds + (int64_t)timezone_offset_seconds;
+    int64_t day_seconds = adjusted_seconds % 86400LL;
+    if (day_seconds < 0) {
+        day_seconds += 86400LL;
+    }
+    uint32_t seconds = (uint32_t)day_seconds;
     uint32_t hours = seconds / 3600u;
     uint32_t minutes = (seconds % 3600u) / 60u;
     uint32_t secs = seconds % 60u;

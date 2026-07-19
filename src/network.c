@@ -13,14 +13,8 @@
 #include "lwip/pbuf.h"
 #include "lwip/udp.h"
 
-#define NTP_SERVER_IP "216.239.35.0"
 #define NTP_SERVER_PORT 123
-#ifndef WIFI_SSID_DEFAULT
-#define WIFI_SSID_DEFAULT ""
-#endif
-#ifndef WIFI_PASSWORD_DEFAULT
-#define WIFI_PASSWORD_DEFAULT ""
-#endif
+#define NTP_SERVER_FALLBACK "216.239.35.0"
 #define WIFI_CONNECT_TIMEOUT_MS 30000u
 #define CAPTIVE_PORTAL_URL "http://networkcheck.kde.org/"
 
@@ -71,16 +65,25 @@ static bool captive_portal_check(void) {
     return success;
 }
 
-bool wifi_connect(void) {
-    if (WIFI_SSID_DEFAULT[0] == '\0') {
-        printf("wifi ssid not configured\n");
+static bool resolve_server_address(const char *host, ip4_addr_t *server_addr) {
+    if (host == NULL || server_addr == NULL) {
         return false;
     }
 
-    if (WIFI_PASSWORD_DEFAULT[0] != '\0') {
-        printf("password-protected Wi-Fi networks are not supported; only open Wi-Fi is supported\n");
+    if (host[0] != '\0' && ip4addr_aton(host, server_addr)) {
+        return true;
+    }
+
+    return ip4addr_aton(NTP_SERVER_FALLBACK, server_addr);
+}
+
+bool wifi_connect(const pico_config_t *config) {
+    if (config == NULL) {
         return false;
     }
+
+    const char *ssid = config->wifi_configured ? config->wifi_ssid : "";
+    const char *password = config->wifi_configured ? config->wifi_password : "";
 
     if (cyw43_arch_init()) {
         printf("cyw43 init failed\n");
@@ -89,8 +92,8 @@ bool wifi_connect(void) {
 
     cyw43_arch_enable_sta_mode();
 
-    if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID_DEFAULT, "", CYW43_AUTH_OPEN,
-                                            WIFI_CONNECT_TIMEOUT_MS)) {
+    uint32_t auth_type = (password[0] != '\0') ? CYW43_AUTH_WPA2_MIXED_PSK : CYW43_AUTH_OPEN;
+    if (cyw43_arch_wifi_connect_timeout_ms(ssid, password, auth_type, WIFI_CONNECT_TIMEOUT_MS)) {
         printf("wifi connect failed\n");
         cyw43_arch_deinit();
         return false;
@@ -106,7 +109,7 @@ bool wifi_connect(void) {
     return true;
 }
 
-bool ntp_sync(clock_state_t *state) {
+bool ntp_sync(clock_state_t *state, const pico_config_t *config) {
     ntp_receive_state_t receive_state = {0};
     struct udp_pcb *pcb = udp_new();
     if (!pcb) {
@@ -139,8 +142,9 @@ bool ntp_sync(clock_state_t *state) {
         return false;
     }
 
+    const char *ntp_server = (config != NULL && config->ntp_server_set && config->ntp_server[0] != '\0') ? config->ntp_server : "ntp.se";
     ip4_addr_t server_addr;
-    if (!ip4addr_aton(NTP_SERVER_IP, &server_addr)) {
+    if (!resolve_server_address(ntp_server, &server_addr)) {
         printf("ntp server address invalid\n");
         pbuf_free(p);
         udp_remove(pcb);
