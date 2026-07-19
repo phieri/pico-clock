@@ -20,7 +20,7 @@
 #define LWIP_RAW 1
 #define LWIP_NETCONN 0
 #define LWIP_IPV4 1
-#define LWIP_IPV6 0
+#define LWIP_IPV6 1
 #define LWIP_DHCP 1
 #define LWIP_AUTOIP 0
 #define LWIP_STATS 0

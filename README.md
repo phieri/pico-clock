@@ -1,6 +1,6 @@
 # pico-clock
 
-A Raspberry Pi Pico 2 W firmware scaffold for a network clock that uses open Wi-Fi, probes the captive-portal check URL, synchronizes from NTP at boot, tracks drift, and formats the current time as HH:mm:ss.
+A Raspberry Pi Pico 2 W firmware scaffold for a network clock that uses open Wi-Fi, probes the captive-portal check URL, prefers IPv6 networking with IPv4 fallback, synchronizes from multiple NTP servers at boot, tracks drift and latency, and formats the current time as HH:mm:ss.
 
 ## What is included
 - CMake-based Pico SDK project targeting `pico2_w`

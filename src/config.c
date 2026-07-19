@@ -198,7 +198,7 @@ void config_init(pico_config_t *config) {
     config->wifi_ssid[0] = '\0';
     config->wifi_password[0] = '\0';
     config->ntp_server[0] = '\0';
-    copy_string(config->ntp_server, sizeof(config->ntp_server), "ntp.se");
+    copy_string(config->ntp_server, sizeof(config->ntp_server), "2001:4860:4860::8888,216.239.35.0");
 }
 
 bool config_load(pico_config_t *config) {
@@ -290,7 +290,7 @@ void config_reset(pico_config_t *config) {
     memset(config, 0, sizeof(*config));
     config->clock_colour = 0xFFu;
     config->ntp_server[0] = '\0';
-    copy_string(config->ntp_server, sizeof(config->ntp_server), "ntp.se");
+    copy_string(config->ntp_server, sizeof(config->ntp_server), "2001:4860:4860::8888,216.239.35.0");
 }
 
 bool config_handle_command(pico_config_t *config, const char *line, char *response, size_t response_size) {
