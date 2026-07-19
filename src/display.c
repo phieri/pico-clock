@@ -111,28 +111,28 @@ void display_draw_text(display_framebuffer_t *framebuffer, int x, int y, const c
 }
 
 static void display_draw_background(display_framebuffer_t *framebuffer) {
-    display_draw_rect(framebuffer, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, 0x00u);
-    display_draw_rect(framebuffer, 40, 40, DISPLAY_WIDTH - 80, DISPLAY_HEIGHT - 80, 0x00u);
+    display_clear(framebuffer, 0x00u);
 }
 
-static void display_draw_status_text(display_framebuffer_t *framebuffer, const char *text, int y, int scale, uint8_t colour) {
-    display_draw_text(framebuffer, 140, y, text, scale, colour);
-}
-
-void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buffer, long drift_ms, uint8_t colour) {
-    const int title_scale = 4;
-    const int detail_scale = 3;
-    const int title_y = 120;
-    const int detail_y = 290;
-
-    display_draw_background(framebuffer);
-    display_draw_status_text(framebuffer, time_buffer, title_y, title_scale, colour);
-
-    char drift_buffer[32];
-    int written = snprintf(drift_buffer, sizeof(drift_buffer), "DRIFT=%ldMS", drift_ms);
-    if (written < 0) {
-        drift_buffer[0] = '\0';
+void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buffer, uint8_t colour) {
+    const size_t time_length = strlen(time_buffer);
+    if (time_length == 0u) {
+        return;
     }
 
-    display_draw_status_text(framebuffer, drift_buffer, detail_y, detail_scale, colour);
+    display_draw_background(framebuffer);
+
+    const int max_width_scale = (DISPLAY_WIDTH - 80u) / (int)(time_length * 6u - 1u);
+    const int max_height_scale = (DISPLAY_HEIGHT - 80u) / 7;
+    int scale = max_width_scale < max_height_scale ? max_width_scale : max_height_scale;
+    if (scale < 1) {
+        scale = 1;
+    }
+
+    const int text_width = (int)((time_length * 6u - 1u) * (unsigned)scale);
+    const int text_height = 7 * scale;
+    const int x = (DISPLAY_WIDTH - (unsigned)text_width) / 2u;
+    const int y = (DISPLAY_HEIGHT - (unsigned)text_height) / 2u;
+
+    display_draw_text(framebuffer, x, y, time_buffer, scale, colour);
 }

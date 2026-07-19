@@ -51,7 +51,7 @@ static void refresh_clock_display(const clock_state_t *clock, const pico_config_
     char time_buffer[16];
     int32_t timezone_offset_seconds = config->timezone_set ? config->timezone_offset_seconds : 0;
     clock_format_hms(epoch, timezone_offset_seconds, time_buffer, sizeof(time_buffer));
-    display_draw_time(display, time_buffer, (long)clock->drift_ms,
+    display_draw_time(display, time_buffer,
                       config->clock_colour_set ? config->clock_colour : 0xFFu);
 }
 

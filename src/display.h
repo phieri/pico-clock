@@ -18,6 +18,6 @@ void display_clear(display_framebuffer_t *framebuffer, uint8_t value);
 void display_draw_pixel(display_framebuffer_t *framebuffer, int x, int y, uint8_t value);
 void display_draw_rect(display_framebuffer_t *framebuffer, int x, int y, int width, int height, uint8_t value);
 void display_draw_text(display_framebuffer_t *framebuffer, int x, int y, const char *text, int scale, uint8_t value);
-void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buffer, long drift_ms, uint8_t colour);
+void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buffer, uint8_t colour);
 
 #endif
