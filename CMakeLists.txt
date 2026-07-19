@@ -16,14 +16,18 @@ endif()
 include("${PICO_SDK_PATH}/external/pico_sdk_import.cmake")
 project(pico_clock C CXX ASM)
 
-set(PICO_BOARD pico2_w CACHE STRING "Pico board variant")
-set(PICO_PLATFORM rp2350 CACHE STRING "Pico platform")
+set(PICO_BOARD pico2_w CACHE STRING "Pico board variant" FORCE)
+set(PICO_PLATFORM rp2350 CACHE STRING "Pico platform" FORCE)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 pico_sdk_init()
 
-add_executable(pico_clock src/main.c)
+add_executable(pico_clock
+  src/main.c
+  src/clock.c
+  src/network.c
+)
 
 if(DEFINED WIFI_SSID)
   target_compile_definitions(pico_clock PRIVATE WIFI_SSID_DEFAULT=\"${WIFI_SSID}\")
