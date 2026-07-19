@@ -89,7 +89,7 @@ static bool ntp_sync(clock_state_t *state) {
     memset(&addr, 0, sizeof(addr));
     addr.sin_len = sizeof(addr);
     addr.sin_family = AF_INET;
-    addr.sin_port = PP_HTONS(NTP_SERVER_PORT);
+    addr.sin_port = htons(NTP_SERVER_PORT);
     addr.sin_addr.s_addr = inet_addr(NTP_SERVER_IP);
 
     uint8_t packet[48] = {0};
@@ -100,7 +100,7 @@ static bool ntp_sync(clock_state_t *state) {
     cyw43_arch_lwip_end();
     if (sent < 0) {
         printf("ntp send failed\n");
-        closesocket(sock);
+        close(sock);
         return false;
     }
 
@@ -109,7 +109,7 @@ static bool ntp_sync(clock_state_t *state) {
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     int received = recvfrom(sock, packet, sizeof(packet), 0, NULL, NULL);
     cyw43_arch_lwip_end();
-    closesocket(sock);
+    close(sock);
 
     if (received < 0) {
         printf("ntp receive failed\n");
