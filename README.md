@@ -7,7 +7,7 @@ A Raspberry Pi Pico 2 W firmware scaffold for a network clock that uses Wi-Fi, s
 - Wi-Fi connection setup for the Pico W using the Raspberry Pi CYW43 driver
 - A simple NTP client that requests the current time from an NTP server at boot
 - Drift tracking based on boot-time sync and subsequent corrections
-- A serial output loop that prints the current time in `HH:mm:ss` format
+- A framebuffer-based display loop that draws the current time and drift on a 1024x600 display surface
 
 ## Build
 1. Install the ARM toolchain and CMake.

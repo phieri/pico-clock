@@ -4,7 +4,9 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if(NOT DEFINED PICO_SDK_PATH)
+if(DEFINED ENV{PICO_SDK_PATH} AND NOT "$ENV{PICO_SDK_PATH}" STREQUAL "")
+  set(PICO_SDK_PATH "$ENV{PICO_SDK_PATH}")
+elseif(NOT DEFINED PICO_SDK_PATH OR PICO_SDK_PATH STREQUAL "")
   set(PICO_SDK_PATH "${CMAKE_SOURCE_DIR}/.deps/pico-sdk")
 endif()
 
@@ -26,6 +28,7 @@ pico_sdk_init()
 add_executable(pico_clock
   src/main.c
   src/clock.c
+  src/display.c
   src/network.c
 )
 
