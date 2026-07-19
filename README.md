@@ -1,1 +1,21 @@
 # pico-clock
+
+A Raspberry Pi Pico 2 W firmware scaffold for a network clock that uses Wi-Fi, synchronizes from NTP at boot, tracks drift, and formats the current time as HH:mm:ss.
+
+## What is included
+- CMake-based Pico SDK project targeting `pico2_w`
+- Wi-Fi connection setup for the Pico W using the Raspberry Pi CYW43 driver
+- A simple NTP client that requests the current time from an NTP server at boot
+- Drift tracking based on boot-time sync and subsequent corrections
+- A serial output loop that prints the current time in `HH:mm:ss` format
+
+## Build
+1. Install the ARM toolchain and CMake.
+2. Bootstrap the Pico SDK and extras:
+   - `./scripts/bootstrap-pico.sh`
+3. Configure and build:
+   - `cmake -S . -B build -DPICO_SDK_PATH=$PWD/.deps/pico-sdk`
+   - `cmake --build build -j2`
+
+## Notes
+The initial scaffold uses the Pico W's wireless stack and an NTP sync loop. To connect to a real network, update the Wi-Fi SSID and password defaults in `src/main.c` before flashing the firmware to hardware.

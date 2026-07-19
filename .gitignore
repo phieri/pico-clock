@@ -1,0 +1,7 @@
+build/
+.deps/
+.vscode/
+*.uf2
+*.bin
+*.elf
+*.map
