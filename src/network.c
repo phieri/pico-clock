@@ -9,6 +9,7 @@
 #include "pico/stdlib.h"
 
 #include "cpr_compat.h"
+#include "cyw43.h"
 
 #include "lwip/inet.h"
 #include "lwip/ip_addr.h"
@@ -54,6 +55,12 @@ typedef struct {
     uint64_t server_epoch_seconds;
 } ntp_sample_t;
 
+typedef struct {
+    bool scan_complete;
+    size_t count;
+    char ssids[8][33];
+} wifi_scan_state_t;
+
 static void ntp_udp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port) {
     ntp_receive_state_t *state = (ntp_receive_state_t *)arg;
     if (!state || !p) {
@@ -63,6 +70,42 @@ static void ntp_udp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const i
     state->length = pbuf_copy_partial(p, state->payload, sizeof(state->payload), 0);
     state->received = true;
     pbuf_free(p);
+}
+
+static int wifi_scan_result_cb(void *env, const cyw43_ev_scan_result_t *result) {
+    wifi_scan_state_t *scan_state = (wifi_scan_state_t *)env;
+    if (scan_state == NULL) {
+        return 0;
+    }
+
+    if (result == NULL) {
+        scan_state->scan_complete = true;
+        return 0;
+    }
+
+    if (result->ssid_len == 0u || result->auth_mode != CYW43_AUTH_OPEN) {
+        return 0;
+    }
+
+    if (scan_state->count >= (sizeof(scan_state->ssids) / sizeof(scan_state->ssids[0]))) {
+        return 0;
+    }
+
+    size_t ssid_len = result->ssid_len;
+    if (ssid_len >= sizeof(scan_state->ssids[0])) {
+        ssid_len = sizeof(scan_state->ssids[0]) - 1u;
+    }
+
+    for (size_t index = 0; index < scan_state->count; ++index) {
+        if (strncmp(scan_state->ssids[index], (const char *)result->ssid, ssid_len) == 0 && scan_state->ssids[index][ssid_len] == '\0') {
+            return 0;
+        }
+    }
+
+    memcpy(scan_state->ssids[scan_state->count], result->ssid, ssid_len);
+    scan_state->ssids[scan_state->count][ssid_len] = '\0';
+    ++scan_state->count;
+    return 0;
 }
 
 static bool captive_portal_check(void) {
@@ -145,6 +188,18 @@ static uint64_t ntp_timestamp_to_epoch_ms(uint32_t seconds, uint32_t fraction) {
     return (epoch_seconds * 1000ULL) + fractional_ms;
 }
 
+static void ntp_epoch_ms_to_timestamp(uint64_t epoch_ms, uint32_t *seconds, uint32_t *fraction) {
+    if (seconds == NULL || fraction == NULL) {
+        return;
+    }
+
+    uint64_t epoch_seconds = epoch_ms / 1000ULL;
+    uint32_t fractional_ms = (uint32_t)(epoch_ms % 1000ULL);
+    *seconds = (uint32_t)(epoch_seconds + 2208988800ULL);
+    uint64_t fraction_value = ((uint64_t)fractional_ms << 32u) / 1000ULL;
+    *fraction = (uint32_t)fraction_value;
+}
+
 static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sample_t *sample) {
     if (sample == NULL) {
         return false;
@@ -175,6 +230,17 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
     uint8_t packet[48] = {0};
     packet[0] = 0x1b;
 
+    uint32_t send_ms = clock_now_ms();
+    uint64_t local_tx_epoch_ms = 0;
+    uint32_t client_tx_seconds = 0;
+    uint32_t client_tx_fraction = 0;
+    if (state != NULL && state->has_time) {
+        local_tx_epoch_ms = (uint64_t)clock_current_epoch_seconds(state, send_ms) * 1000ULL;
+    }
+    ntp_epoch_ms_to_timestamp(local_tx_epoch_ms, &client_tx_seconds, &client_tx_fraction);
+    ((uint32_t *)packet)[10] = htonl(client_tx_seconds);
+    ((uint32_t *)packet)[11] = htonl(client_tx_fraction);
+
     struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, sizeof(packet), PBUF_RAM);
     if (!p) {
         printf("pbuf alloc failed for %s\n", server);
@@ -199,7 +265,6 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
         return false;
     }
 
-    uint32_t send_ms = clock_now_ms();
     uint32_t deadline = send_ms + NTP_TIMEOUT_MS;
     while (!receive_state.received && (clock_now_ms() < deadline)) {
         cyw43_arch_poll();
@@ -217,12 +282,12 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
     ntp_packet_t *ntp = (ntp_packet_t *)receive_state.payload;
     uint64_t server_tx_epoch_ms = ntp_timestamp_to_epoch_ms(ntohl(ntp->tx_tm_s), ntohl(ntp->tx_tm_f));
     uint64_t server_rx_epoch_ms = ntp_timestamp_to_epoch_ms(ntohl(ntp->rx_tm_s), ntohl(ntp->rx_tm_f));
+    uint64_t response_orig_epoch_ms = ntp_timestamp_to_epoch_ms(ntohl(ntp->orig_tm_s), ntohl(ntp->orig_tm_f));
 
     if (state != NULL && state->has_time) {
-        uint64_t local_send_epoch_ms = (uint64_t)clock_current_epoch_seconds(state, send_ms) * 1000ULL;
         uint64_t local_recv_epoch_ms = (uint64_t)clock_current_epoch_seconds(state, receive_ms) * 1000ULL;
-        sample->offset_ms = ((int64_t)server_tx_epoch_ms - (int64_t)local_send_epoch_ms + (int64_t)server_rx_epoch_ms - (int64_t)local_recv_epoch_ms) / 2LL;
-        sample->latency_ms = (int64_t)(receive_ms - send_ms) - (int64_t)(server_rx_epoch_ms - server_tx_epoch_ms);
+        sample->offset_ms = ((int64_t)server_rx_epoch_ms - (int64_t)response_orig_epoch_ms + (int64_t)server_tx_epoch_ms - (int64_t)local_recv_epoch_ms) / 2LL;
+        sample->latency_ms = (int64_t)(receive_ms - send_ms) - ((int64_t)server_tx_epoch_ms - (int64_t)server_rx_epoch_ms);
     } else {
         sample->offset_ms = 0;
         sample->latency_ms = (int64_t)(receive_ms - send_ms);
@@ -238,8 +303,9 @@ bool wifi_connect(const pico_config_t *config) {
         return false;
     }
 
-    const char *ssid = config->wifi_configured ? config->wifi_ssid : "";
-    const char *password = config->wifi_configured ? config->wifi_password : "";
+    const bool configured = config->wifi_configured && config->wifi_ssid[0] != '\0';
+    const char *ssid = configured ? config->wifi_ssid : "";
+    const char *password = configured ? config->wifi_password : "";
 
     if (cyw43_arch_init()) {
         printf("cyw43 init failed\n");
@@ -248,21 +314,58 @@ bool wifi_connect(const pico_config_t *config) {
 
     cyw43_arch_enable_sta_mode();
 
-    uint32_t auth_type = (password[0] != '\0') ? CYW43_AUTH_WPA2_MIXED_PSK : CYW43_AUTH_OPEN;
-    if (cyw43_arch_wifi_connect_timeout_ms(ssid, password, auth_type, WIFI_CONNECT_TIMEOUT_MS)) {
-        printf("wifi connect failed\n");
+    if (configured) {
+        uint32_t auth_type = (password[0] != '\0') ? CYW43_AUTH_WPA3_WPA2_AES_PSK : CYW43_AUTH_OPEN;
+        if (cyw43_arch_wifi_connect_timeout_ms(ssid, password, auth_type, WIFI_CONNECT_TIMEOUT_MS)) {
+            printf("wifi connect failed\n");
+            cyw43_arch_deinit();
+            return false;
+        }
+
+        printf("wifi connected\n");
+        if (!captive_portal_check()) {
+            printf("captive portal probe failed; delaying reconnect\n");
+            cyw43_arch_deinit();
+            return false;
+        }
+        return true;
+    }
+
+    wifi_scan_state_t scan_state = {0};
+    int scan_err = cyw43_wifi_scan(&cyw43_state, NULL, &scan_state, wifi_scan_result_cb);
+    if (scan_err != 0) {
+        printf("wifi scan failed: %d\n", scan_err);
         cyw43_arch_deinit();
         return false;
     }
 
-    printf("wifi connected\n");
-    if (!captive_portal_check()) {
-        printf("captive portal probe failed; delaying reconnect\n");
+    uint32_t scan_deadline = clock_now_ms() + WIFI_CONNECT_TIMEOUT_MS;
+    while (!scan_state.scan_complete && (clock_now_ms() < scan_deadline)) {
+        cyw43_arch_poll();
+        sleep_ms(50);
+    }
+
+    if (!scan_state.scan_complete) {
+        printf("wifi scan timed out\n");
         cyw43_arch_deinit();
         return false;
     }
 
-    return true;
+    for (size_t index = 0; index < scan_state.count; ++index) {
+        if (cyw43_arch_wifi_connect_timeout_ms(scan_state.ssids[index], "", CYW43_AUTH_OPEN, WIFI_CONNECT_TIMEOUT_MS)) {
+            continue;
+        }
+
+        printf("wifi connected to %s\n", scan_state.ssids[index]);
+        if (captive_portal_check()) {
+            return true;
+        }
+
+        printf("captive portal probe failed for %s; trying next network\n", scan_state.ssids[index]);
+    }
+
+    cyw43_arch_deinit();
+    return false;
 }
 
 bool ntp_sync(clock_state_t *state, const pico_config_t *config) {
