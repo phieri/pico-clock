@@ -49,9 +49,19 @@ static void refresh_clock_display(const clock_state_t *clock, const pico_config_
     uint32_t now = clock_now_ms();
     uint64_t epoch = clock_current_epoch_seconds(clock, now);
     char time_buffer[16];
+    char date_buffer[24];
     int32_t timezone_offset_seconds = config->timezone_set ? config->timezone_offset_seconds : 0;
+    bool show_date = false;
     clock_format_hms(epoch, timezone_offset_seconds, time_buffer, sizeof(time_buffer));
-    display_draw_time(display, time_buffer,
+    if (config->date_display_mode == PICO_DATE_DISPLAY_ON) {
+        show_date = true;
+    } else if (config->date_display_mode == PICO_DATE_DISPLAY_AUTO) {
+        show_date = clock_should_show_date(epoch, timezone_offset_seconds, 2u);
+    }
+    if (show_date) {
+        clock_format_date(epoch, timezone_offset_seconds, date_buffer, sizeof(date_buffer));
+    }
+    display_draw_time(display, time_buffer, show_date ? date_buffer : NULL, show_date,
                       config->clock_colour_set ? config->clock_colour : 0xFFu);
 }
 

@@ -17,5 +17,7 @@ void clock_init(clock_state_t *state);
 uint32_t clock_now_ms(void);
 uint64_t clock_current_epoch_seconds(const clock_state_t *state, uint32_t now);
 void clock_format_hms(uint64_t epoch_seconds, int32_t timezone_offset_seconds, char *buffer, size_t size);
+void clock_format_date(uint64_t epoch_seconds, int32_t timezone_offset_seconds, char *buffer, size_t size);
+bool clock_should_show_date(uint64_t epoch_seconds, int32_t timezone_offset_seconds, uint8_t date_display_mode);
 
 #endif

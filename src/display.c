@@ -170,7 +170,7 @@ void display_draw_startup(display_framebuffer_t *framebuffer, uint8_t colour) {
     display_draw_text(framebuffer, subtitle_x, 330, subtitle, subtitle_scale, colour);
 }
 
-void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buffer, uint8_t colour) {
+void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buffer, const char *date_buffer, bool show_date, uint8_t colour) {
     const size_t time_length = strlen(time_buffer);
     if (time_length == 0u) {
         return;
@@ -178,17 +178,29 @@ void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buff
 
     display_draw_background(framebuffer);
 
-    const int max_width_scale = (DISPLAY_WIDTH - 80u) / (int)(time_length * 6u - 1u);
-    const int max_height_scale = (DISPLAY_HEIGHT - 80u) / 7;
+    const size_t date_length = show_date && date_buffer != NULL ? strlen(date_buffer) : 0u;
+    const size_t longest_length = time_length > date_length ? time_length : date_length;
+    const int max_width_scale = (DISPLAY_WIDTH - 80u) / (int)((longest_length * 6u) - 1u);
+    const int max_height_scale = (DISPLAY_HEIGHT - 80u - (show_date ? 20 : 0)) / (show_date ? 14 : 7);
     int scale = max_width_scale < max_height_scale ? max_width_scale : max_height_scale;
     if (scale < 1) {
         scale = 1;
     }
 
-    const int text_width = (int)((time_length * 6u - 1u) * (unsigned)scale);
+    const int text_width = (int)((longest_length * 6u - 1u) * (unsigned)scale);
     const int text_height = 7 * scale;
     const int x = (DISPLAY_WIDTH - (unsigned)text_width) / 2u;
-    const int y = (DISPLAY_HEIGHT - (unsigned)text_height) / 2u;
+    const int block_height = (show_date ? (text_height * 2u + 20u) : text_height);
+    const int y = (DISPLAY_HEIGHT - (unsigned)block_height) / 2u;
 
-    display_draw_text(framebuffer, x, y, time_buffer, scale, colour);
+    const int time_x = x + (((int)longest_length * 6u - 1u) * scale - (int)(time_length * 6u - 1u) * scale) / 2;
+    const int time_y = y;
+
+    display_draw_text(framebuffer, time_x, time_y, time_buffer, scale, colour);
+    if (show_date && date_buffer != NULL && date_length != 0u) {
+        const int date_width = (int)((date_length * 6u - 1u) * (unsigned)scale);
+        const int date_x = x + (((int)longest_length * 6u - 1u) * scale - date_width) / 2;
+        const int date_y = time_y + text_height + 20;
+        display_draw_text(framebuffer, date_x, date_y, date_buffer, scale, colour);
+    }
 }

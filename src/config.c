@@ -19,7 +19,7 @@
 #define CONFIG_FILE_NAME "/config.bin"
 
 #define CONFIG_MAGIC 0x50434f4eUL
-#define CONFIG_VERSION 1u
+#define CONFIG_VERSION 2u
 
 typedef struct {
     uint32_t magic;
@@ -33,6 +33,21 @@ typedef struct {
     char wifi_password[64];
     uint8_t ntp_server_set;
     char ntp_server[64];
+} persisted_config_v1_t;
+
+typedef struct {
+    uint32_t magic;
+    uint32_t version;
+    int32_t timezone_offset_seconds;
+    uint8_t timezone_set;
+    uint8_t clock_colour;
+    uint8_t clock_colour_set;
+    uint8_t wifi_configured;
+    char wifi_ssid[32];
+    char wifi_password[64];
+    uint8_t ntp_server_set;
+    char ntp_server[64];
+    uint8_t date_display_mode;
 } persisted_config_t;
 
 typedef struct {
@@ -106,7 +121,25 @@ static void config_apply_defaults(pico_config_t *config) {
     config->wifi_ssid[0] = '\0';
     config->wifi_password[0] = '\0';
     config->ntp_server[0] = '\0';
+    config->date_display_mode = PICO_DATE_DISPLAY_OFF;
     copy_string(config->ntp_server, sizeof(config->ntp_server), "2001:4860:4860::8888,216.239.35.0");
+}
+
+static void config_load_legacy_persisted(const persisted_config_v1_t *persisted, pico_config_t *config) {
+    if (persisted == NULL || config == NULL) {
+        return;
+    }
+
+    config->timezone_set = persisted->timezone_set != 0;
+    config->timezone_offset_seconds = persisted->timezone_offset_seconds;
+    config->clock_colour_set = persisted->clock_colour_set != 0;
+    config->clock_colour = persisted->clock_colour;
+    config->wifi_configured = persisted->wifi_configured != 0;
+    copy_string(config->wifi_ssid, sizeof(config->wifi_ssid), persisted->wifi_ssid);
+    copy_string(config->wifi_password, sizeof(config->wifi_password), persisted->wifi_password);
+    config->ntp_server_set = persisted->ntp_server_set != 0;
+    copy_string(config->ntp_server, sizeof(config->ntp_server), persisted->ntp_server);
+    config->date_display_mode = PICO_DATE_DISPLAY_OFF;
 }
 
 static void config_load_persisted(const persisted_config_t *persisted, pico_config_t *config) {
@@ -123,6 +156,7 @@ static void config_load_persisted(const persisted_config_t *persisted, pico_conf
     copy_string(config->wifi_password, sizeof(config->wifi_password), persisted->wifi_password);
     config->ntp_server_set = persisted->ntp_server_set != 0;
     copy_string(config->ntp_server, sizeof(config->ntp_server), persisted->ntp_server);
+    config->date_display_mode = (pico_date_display_mode_t)persisted->date_display_mode;
 }
 
 static void config_store_persisted(const pico_config_t *config, persisted_config_t *persisted) {
@@ -142,6 +176,7 @@ static void config_store_persisted(const pico_config_t *config, persisted_config
     copy_string(persisted->wifi_password, sizeof(persisted->wifi_password), config->wifi_password);
     persisted->ntp_server_set = config->ntp_server_set ? 1u : 0u;
     copy_string(persisted->ntp_server, sizeof(persisted->ntp_server), config->ntp_server);
+    persisted->date_display_mode = (uint8_t)config->date_display_mode;
 }
 
 static bool parse_timezone_offset(const char *text, int32_t *offset_seconds) {
@@ -190,6 +225,26 @@ static bool parse_colour(const char *text, uint8_t *value) {
 
     *value = (uint8_t)parsed;
     return true;
+}
+
+static bool parse_date_display_mode(const char *text, pico_date_display_mode_t *value) {
+    if (text == NULL || value == NULL) {
+        return false;
+    }
+
+    if (strcmp(text, "on") == 0) {
+        *value = PICO_DATE_DISPLAY_ON;
+        return true;
+    }
+    if (strcmp(text, "auto") == 0) {
+        *value = PICO_DATE_DISPLAY_AUTO;
+        return true;
+    }
+    if (strcmp(text, "off") == 0) {
+        *value = PICO_DATE_DISPLAY_OFF;
+        return true;
+    }
+    return false;
 }
 
 static bool config_prepare_filesystem(void) {
@@ -257,20 +312,32 @@ bool config_load(pico_config_t *config) {
         return true;
     }
 
-    persisted_config_t persisted;
+    union {
+        persisted_config_t current;
+        persisted_config_v1_t legacy;
+    } persisted;
     memset(&persisted, 0, sizeof(persisted));
-    lfs_ssize_t size = lfs_file_read(&g_lfs, &file, &persisted, sizeof(persisted));
+    lfs_ssize_t size = lfs_file_read(&g_lfs, &file, &persisted, sizeof(persisted.current));
     lfs_file_close(&g_lfs, &file);
 
-    if (size < (lfs_ssize_t)sizeof(persisted_config_t)) {
+    if (size < (lfs_ssize_t)sizeof(persisted_config_v1_t)) {
         return true;
     }
 
-    if (persisted.magic != CONFIG_MAGIC || persisted.version != CONFIG_VERSION) {
+    if (persisted.current.magic != CONFIG_MAGIC) {
         return true;
     }
 
-    config_load_persisted(&persisted, config);
+    if (persisted.current.version == CONFIG_VERSION) {
+        config_load_persisted(&persisted.current, config);
+        return true;
+    }
+
+    if (persisted.current.version == 1u) {
+        config_load_legacy_persisted(&persisted.legacy, config);
+        return true;
+    }
+
     return true;
 }
 
@@ -421,6 +488,30 @@ bool config_handle_command(pico_config_t *config, const char *line, char *respon
 
     if (strcmp(command_lower, "wifi") == 0) {
         return config_handle_wifi_command(config, value, response, response_size);
+    }
+
+    if (strcmp(command_lower, "date") == 0 || strcmp(command_lower, "showdate") == 0) {
+        if (value[0] == '\0') {
+            config->date_display_mode = PICO_DATE_DISPLAY_OFF;
+            snprintf(response, response_size, "date display set to off");
+            return true;
+        }
+
+        pico_date_display_mode_t date_display_mode = PICO_DATE_DISPLAY_OFF;
+        if (!parse_date_display_mode(value, &date_display_mode)) {
+            snprintf(response, response_size, "invalid date mode");
+            return false;
+        }
+
+        config->date_display_mode = date_display_mode;
+        const char *date_mode_name = "off";
+        if (date_display_mode == PICO_DATE_DISPLAY_ON) {
+            date_mode_name = "on";
+        } else if (date_display_mode == PICO_DATE_DISPLAY_AUTO) {
+            date_mode_name = "auto";
+        }
+        snprintf(response, response_size, "date display set to %s", date_mode_name);
+        return true;
     }
 
     if (strcmp(command_lower, "ntp") == 0) {

@@ -35,4 +35,5 @@ Build outputs are written under `build/` as `.uf2`, `.elf`, `.bin`, and `.hex` a
 
 ## Notes
 - Wi-Fi credentials are configured over the serial console after flashing. Use the `wifi <ssid> [<password>]` command to store credentials persistently; no compile-time Wi-Fi defaults are supported.
+- Date display behaviour is also configured over the serial console with the `date on|auto|off` command (or `showdate ...` as an alias). `on` shows the date below the time at all times, `auto` only shows it around midnight, and `off` keeps the existing time-only display.
 - The project expects the Pico SDK under `.deps/pico-sdk` and the littlefs sources under `.deps/littlefs`; `./scripts/bootstrap-pico.sh` helps prepare those paths. If configure later complains about missing `lfs.c`, clone littlefs into `.deps/littlefs` before retrying.
