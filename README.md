@@ -26,7 +26,7 @@ A Raspberry Pi Pico 2 W firmware project for a compact network clock. The firmwa
    - `./scripts/bootstrap-pico.sh`
 3. Configure a build directory.
    - For a local `pico2_w` build:
-     `cmake -S . -B build -DPICO_SDK_PATH=$PWD/.deps/pico-sdk -DPICO_BOARD=pico2_w -DWIFI_SSID=ci_build -DWIFI_PASSWORD=ci_build`
+     `cmake -S . -B build -DPICO_SDK_PATH=$PWD/.deps/pico-sdk -DPICO_BOARD=pico2_w`
    - To target `pico_w` instead, replace `pico2_w` with `pico_w`.
 4. Build the firmware:
    - `cmake --build build -j2`
@@ -34,5 +34,5 @@ A Raspberry Pi Pico 2 W firmware project for a compact network clock. The firmwa
 Build outputs are written under `build/` as `.uf2`, `.elf`, `.bin`, and `.hex` artifacts.
 
 ## Notes
-- The firmware uses compile-time defaults for Wi-Fi credentials. Set `-DWIFI_SSID=...` and `-DWIFI_PASSWORD=...` before flashing to hardware.
+- Wi-Fi credentials are configured over the serial console after flashing. Use the `wifi <ssid> [<password>]` command to store credentials persistently; no compile-time Wi-Fi defaults are supported.
 - The project expects the Pico SDK under `.deps/pico-sdk` and the littlefs sources under `.deps/littlefs`; `./scripts/bootstrap-pico.sh` helps prepare those paths. If configure later complains about missing `lfs.c`, clone littlefs into `.deps/littlefs` before retrying.
