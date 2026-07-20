@@ -5,6 +5,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+typedef enum {
+    PICO_DATE_DISPLAY_OFF = 0,
+    PICO_DATE_DISPLAY_ON = 1,
+    PICO_DATE_DISPLAY_AUTO = 2,
+} pico_date_display_mode_t;
+
 typedef struct {
     bool timezone_set;
     int32_t timezone_offset_seconds;
@@ -15,6 +21,7 @@ typedef struct {
     char wifi_password[64];
     bool ntp_server_set;
     char ntp_server[64];
+    pico_date_display_mode_t date_display_mode;
 } pico_config_t;
 
 void config_init(pico_config_t *config);
