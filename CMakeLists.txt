@@ -38,6 +38,7 @@ add_executable(pico_clock
   src/cpr_compat.c
   src/network.c
   src/config.c
+  src/runtime.c
 )
 
 target_include_directories(pico_clock PRIVATE
