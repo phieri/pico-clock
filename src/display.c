@@ -25,6 +25,15 @@ static void draw_glyph(display_framebuffer_t *framebuffer, int x, int y, char ch
         {0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100}, // T
         {0b10001, 0b10001, 0b10001, 0b10101, 0b10101, 0b11011, 0b10001}, // M
         {0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b10001}, // S
+        {0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001}, // A
+        {0b01110, 0b10001, 0b10000, 0b10000, 0b10000, 0b10001, 0b01110}, // C
+        {0b10001, 0b10010, 0b10100, 0b11000, 0b10100, 0b10010, 0b10001}, // K
+        {0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111}, // L
+        {0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001, 0b10001}, // N
+        {0b01110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110}, // O
+        {0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000}, // P
+        {0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110}, // U
+        {0b10001, 0b10001, 0b01010, 0b00100, 0b00100, 0b00100, 0b00100}, // Y
     };
 
     int glyph_index = -1;
@@ -49,6 +58,24 @@ static void draw_glyph(display_framebuffer_t *framebuffer, int x, int y, char ch
             case 'm': glyph_index = 18; break;
             case 'S':
             case 's': glyph_index = 19; break;
+            case 'A':
+            case 'a': glyph_index = 20; break;
+            case 'C':
+            case 'c': glyph_index = 21; break;
+            case 'K':
+            case 'k': glyph_index = 22; break;
+            case 'L':
+            case 'l': glyph_index = 23; break;
+            case 'N':
+            case 'n': glyph_index = 24; break;
+            case 'O':
+            case 'o': glyph_index = 25; break;
+            case 'P':
+            case 'p': glyph_index = 26; break;
+            case 'U':
+            case 'u': glyph_index = 27; break;
+            case 'Y':
+            case 'y': glyph_index = 28; break;
             default: return;
         }
     }
@@ -112,6 +139,35 @@ void display_draw_text(display_framebuffer_t *framebuffer, int x, int y, const c
 
 static void display_draw_background(display_framebuffer_t *framebuffer) {
     display_clear(framebuffer, 0x00u);
+}
+
+static int display_measure_text_width(const char *text, int scale) {
+    int width = 0;
+    for (const char *it = text; *it != '\0'; ++it) {
+        if (*it == ' ') {
+            width += 4 * scale;
+        } else {
+            width += 6 * scale;
+        }
+    }
+    return width;
+}
+
+void display_draw_startup(display_framebuffer_t *framebuffer, uint8_t colour) {
+    display_draw_background(framebuffer);
+    display_draw_rect(framebuffer, 40, 40, DISPLAY_WIDTH - 80u, DISPLAY_HEIGHT - 80u, colour);
+
+    const char *title = "PICO CLOCK";
+    const char *subtitle = "SYNCING";
+    const int title_scale = 4;
+    const int subtitle_scale = 2;
+    const int title_width = display_measure_text_width(title, title_scale);
+    const int subtitle_width = display_measure_text_width(subtitle, subtitle_scale);
+    const int title_x = (DISPLAY_WIDTH - (unsigned)title_width) / 2u;
+    const int subtitle_x = (DISPLAY_WIDTH - (unsigned)subtitle_width) / 2u;
+
+    display_draw_text(framebuffer, title_x, 160, title, title_scale, colour);
+    display_draw_text(framebuffer, subtitle_x, 330, subtitle, subtitle_scale, colour);
 }
 
 void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buffer, uint8_t colour) {
