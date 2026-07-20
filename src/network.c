@@ -21,6 +21,9 @@
 #define NTP_SERVER_FALLBACK_IPV4 "216.239.35.0"
 #define WIFI_CONNECT_TIMEOUT_MS 30000u
 #define CAPTIVE_PORTAL_URL "http://networkcheck.kde.org/"
+#define CAPTIVE_PORTAL_FALLBACK_URL_1 "http://detectportal.firefox.com/success.txt"
+#define CAPTIVE_PORTAL_FALLBACK_URL_2 "http://captive.apple.com/hotspot-detect.html"
+#define CAPTIVE_PORTAL_FALLBACK_URL_3 "http://clients3.google.com/generate_204"
 #define NTP_TIMEOUT_MS 5000u
 #define NTP_MAX_SERVERS 4u
 
@@ -108,16 +111,47 @@ static int wifi_scan_result_cb(void *env, const cyw43_ev_scan_result_t *result) 
     return 0;
 }
 
-static bool captive_portal_check(void) {
-    cpr_response_t response = cpr_get(CAPTIVE_PORTAL_URL);
-    bool success = cpr_is_successful(&response);
-    if (success) {
-        printf("captive portal probe succeeded with HTTP %ld\n", response.status_code);
-    } else {
-        printf("captive portal probe failed with HTTP %ld\n", response.status_code);
+static bool response_body_indicates_success(const cpr_response_t *response) {
+    if (response == NULL || response->text == NULL || response->text_length == 0u) {
+        return false;
     }
-    cpr_response_free(&response);
-    return success;
+
+    char normalized[64];
+    size_t normalized_length = response->text_length;
+    if (normalized_length >= sizeof(normalized)) {
+        normalized_length = sizeof(normalized) - 1u;
+    }
+
+    for (size_t index = 0; index < normalized_length; ++index) {
+        normalized[index] = (char)tolower((unsigned char)response->text[index]);
+    }
+    normalized[normalized_length] = '\0';
+
+    return strstr(normalized, "ok") != NULL || strstr(normalized, "success") != NULL || strstr(normalized, "generate_204") != NULL;
+}
+
+static bool captive_portal_check(void) {
+    static const char *const probe_urls[] = {
+        CAPTIVE_PORTAL_URL,
+        CAPTIVE_PORTAL_FALLBACK_URL_1,
+        CAPTIVE_PORTAL_FALLBACK_URL_2,
+        CAPTIVE_PORTAL_FALLBACK_URL_3,
+    };
+
+    for (size_t index = 0; index < (sizeof(probe_urls) / sizeof(probe_urls[0])); ++index) {
+        cpr_response_t response = cpr_get(probe_urls[index]);
+        bool success = (response.status_code == 204u) || (cpr_is_successful(&response) && response_body_indicates_success(&response));
+        if (success) {
+            printf("captive portal probe succeeded with HTTP %ld via %s\n", response.status_code, probe_urls[index]);
+            cpr_response_free(&response);
+            return true;
+        }
+
+        printf("captive portal probe failed for %s with HTTP %ld\n", probe_urls[index], response.status_code);
+        cpr_response_free(&response);
+    }
+
+    return false;
 }
 
 static void trim_whitespace(char *text) {
@@ -315,6 +349,7 @@ bool wifi_connect(const pico_config_t *config) {
     cyw43_arch_enable_sta_mode();
 
     if (configured) {
+        const bool use_open_wifi_probe = (password[0] == '\0');
         uint32_t auth_type = (password[0] != '\0') ? CYW43_AUTH_WPA3_WPA2_AES_PSK : CYW43_AUTH_OPEN;
         if (cyw43_arch_wifi_connect_timeout_ms(ssid, password, auth_type, WIFI_CONNECT_TIMEOUT_MS)) {
             printf("wifi connect failed\n");
@@ -323,7 +358,7 @@ bool wifi_connect(const pico_config_t *config) {
         }
 
         printf("wifi connected\n");
-        if (!captive_portal_check()) {
+        if (use_open_wifi_probe && !captive_portal_check()) {
             printf("captive portal probe failed; delaying reconnect\n");
             cyw43_arch_deinit();
             return false;
