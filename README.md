@@ -1,29 +1,38 @@
 # pico-clock
 
-A Raspberry Pi Pico 2 W firmware scaffold for a network clock that uses open Wi-Fi, probes the captive-portal check URL, prefers IPv6 networking with IPv4 fallback, synchronizes from multiple NTP servers at boot, tracks drift and latency, and formats the current time as HH:mm:ss.
+A Raspberry Pi Pico 2 W firmware project for a compact network clock. The firmware boots, connects to an open Wi-Fi network, validates connectivity with a captive-portal probe, synchronizes time over NTP, tracks drift and latency, and renders the current time and status on a framebuffer-backed display.
 
 ![Pico Clock display preview](docs/pico-clock-screenshot.png)
 
-## What is included
-- CMake-based Pico SDK project targeting `pico2_w`
-- Wi-Fi connection setup for the Pico W using the Raspberry Pi CYW43 driver
-- A simple NTP client that requests the current time from an NTP server at boot
-- An HTTP probe against http://networkcheck.kde.org/ that validates open Wi-Fi connectivity and rejects password-protected networks
-- Drift tracking based on boot-time sync and subsequent corrections
-- A framebuffer-based display loop that draws the current time and drift on a 1024x600 display surface
+## What the firmware does
+- Builds with CMake and the Raspberry Pi Pico SDK.
+- Targets the Pico W / Pico 2 W family via the Pico SDK's `pico_cyw43_arch` networking stack.
+- Connects to open Wi-Fi networks and rejects password-protected networks by probing `http://networkcheck.kde.org/`.
+- Prefers IPv6 NTP resolution with IPv4 fallback and retries against multiple servers.
+- Tracks boot-time drift and subsequent time corrections.
+- Renders the current time and drift information in a framebuffer display loop.
 
-## Refactor highlights
-- Refactored the runtime loop in `src/main.c` into focused helpers for serial input handling and display refreshes.
-- Simplified configuration persistence in `src/config.c` with shared helpers for defaults, load/save paths, and command parsing.
-- Split the display drawing routine in `src/display.c` into reusable framing and text helpers for easier maintenance.
+## Project layout
+- `src/main.c` orchestrates boot-time setup and the runtime loop.
+- `src/network.c` handles Wi-Fi connection, captive-portal probing, and NTP sync.
+- `src/display.c` renders the framebuffer output.
+- `src/config.c` manages persistent settings.
+- `src/clock.c` tracks time and drift.
 
 ## Build
-1. Install the ARM toolchain and CMake.
-2. Bootstrap the Pico SDK and extras:
+1. Install the ARM toolchain and build tools:
+   - `gcc-arm-none-eabi`, `libnewlib-arm-none-eabi`, `build-essential`, and `cmake`.
+2. Bootstrap the SDK and local dependencies:
    - `./scripts/bootstrap-pico.sh`
-3. Configure and build:
-   - `cmake -S . -B build -DPICO_SDK_PATH=$PWD/.deps/pico-sdk`
+3. Configure a build directory.
+   - For a local `pico2_w` build:
+     `cmake -S . -B build -DPICO_SDK_PATH=$PWD/.deps/pico-sdk -DPICO_BOARD=pico2_w -DWIFI_SSID=ci_build -DWIFI_PASSWORD=ci_build`
+   - To target `pico_w` instead, replace `pico2_w` with `pico_w`.
+4. Build the firmware:
    - `cmake --build build -j2`
 
+Build outputs are written under `build/` as `.uf2`, `.elf`, `.bin`, and `.hex` artifacts.
+
 ## Notes
-The initial scaffold uses the Pico W's wireless stack and an NTP sync loop. To connect to a real network, update the Wi-Fi SSID default in `src/main.c` before flashing the firmware to hardware. Password-protected networks are intentionally unsupported; the firmware only autoconnects to open Wi-Fi and verifies connectivity by probing `http://networkcheck.kde.org/`.
+- The firmware uses compile-time defaults for Wi-Fi credentials. Set `-DWIFI_SSID=...` and `-DWIFI_PASSWORD=...` before flashing to hardware.
+- The project expects the Pico SDK under `.deps/pico-sdk` and the littlefs sources under `.deps/littlefs`; `./scripts/bootstrap-pico.sh` helps prepare those paths. If configure later complains about missing `lfs.c`, clone littlefs into `.deps/littlefs` before retrying.
