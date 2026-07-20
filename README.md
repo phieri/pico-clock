@@ -13,7 +13,8 @@ A Raspberry Pi Pico 2 W firmware project for a compact network clock. The firmwa
 - Renders the current time and drift information in a framebuffer display loop.
 
 ## Project layout
-- `src/main.c` orchestrates boot-time setup and the runtime loop.
+- `src/main.c` is the firmware entry point.
+- `src/runtime.c` owns the boot-time setup and runtime loop orchestration.
 - `src/network.c` handles Wi-Fi connection, captive-portal probing, and NTP sync.
 - `src/display.c` renders the framebuffer output.
 - `src/config.c` manages persistent settings.

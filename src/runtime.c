@@ -53,7 +53,7 @@ static void refresh_clock_display(runtime_state_t *state) {
     if (state->config.date_display_mode == PICO_DATE_DISPLAY_ON) {
         show_date = true;
     } else if (state->config.date_display_mode == PICO_DATE_DISPLAY_AUTO) {
-        show_date = clock_should_show_date(epoch, timezone_offset_seconds, 2u);
+        show_date = clock_should_show_date(epoch, timezone_offset_seconds, state->config.date_display_mode);
     }
     if (show_date) {
         clock_format_date(epoch, timezone_offset_seconds, date_buffer, sizeof(date_buffer));
