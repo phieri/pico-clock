@@ -50,14 +50,6 @@ target_compile_definitions(pico_clock PRIVATE
   PICO_CYW43_ARCH_HEADER=pico/cyw43_arch/arch_poll.h
 )
 
-if(DEFINED WIFI_SSID)
-  target_compile_definitions(pico_clock PRIVATE WIFI_SSID_DEFAULT=\"${WIFI_SSID}\")
-endif()
-
-if(DEFINED WIFI_PASSWORD)
-  target_compile_definitions(pico_clock PRIVATE WIFI_PASSWORD_DEFAULT=\"${WIFI_PASSWORD}\")
-endif()
-
 target_link_libraries(pico_clock
   pico_stdlib
   pico_time
