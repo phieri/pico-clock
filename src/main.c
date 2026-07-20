@@ -80,6 +80,12 @@ int main(void) {
             wifi_ready = false;
         }
 
+        if (!clock.has_time) {
+            display_draw_startup(&display, config.clock_colour_set ? config.clock_colour : 0xFFu);
+        } else {
+            refresh_clock_display(&clock, &config, &display);
+        }
+
         if (!wifi_ready) {
             wifi_ready = wifi_connect(&config);
             if (!wifi_ready) {
@@ -92,7 +98,11 @@ int main(void) {
             ntp_sync(&clock, &config);
         }
 
-        refresh_clock_display(&clock, &config, &display);
+        if (!clock.has_time) {
+            display_draw_startup(&display, config.clock_colour_set ? config.clock_colour : 0xFFu);
+        } else {
+            refresh_clock_display(&clock, &config, &display);
+        }
         sleep_ms(CLOCK_REFRESH_INTERVAL_MS);
     }
 
