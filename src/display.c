@@ -3,6 +3,14 @@
 #include <stdio.h>
 #include <string.h>
 
+typedef struct {
+    int width;
+    int height;
+    int scale;
+    int x;
+    int y;
+} display_layout_t;
+
 static void draw_glyph(display_framebuffer_t *framebuffer, int x, int y, char ch, int scale, uint8_t value) {
     static const uint8_t font5x7[][7] = {
         {0b01110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110}, // 0
@@ -94,6 +102,38 @@ static void draw_glyph(display_framebuffer_t *framebuffer, int x, int y, char ch
     }
 }
 
+static int display_measure_text_width(const char *text, int scale) {
+    int width = 0;
+    for (const char *it = text; *it != '\0'; ++it) {
+        if (*it == ' ') {
+            width += 4 * scale;
+        } else {
+            width += 6 * scale;
+        }
+    }
+    return width;
+}
+
+static void display_prepare_layout(const char *time_buffer, const char *date_buffer, bool show_date, display_layout_t *layout) {
+    const size_t time_length = strlen(time_buffer);
+    const size_t date_length = (show_date && date_buffer != NULL) ? strlen(date_buffer) : 0u;
+    const size_t longest_length = time_length > date_length ? time_length : date_length;
+
+    const int max_width_scale = (DISPLAY_WIDTH - 80u) / (int)((longest_length * 6u) - 1u);
+    const int max_height_scale = (DISPLAY_HEIGHT - 80u - (show_date ? 20 : 0)) / (show_date ? 14 : 7);
+    layout->scale = max_width_scale < max_height_scale ? max_width_scale : max_height_scale;
+    if (layout->scale < 1) {
+        layout->scale = 1;
+    }
+
+    const int text_width = (int)((longest_length * 6u - 1u) * (unsigned)layout->scale);
+    const int text_height = 7 * layout->scale;
+    layout->width = text_width;
+    layout->height = (show_date ? (text_height * 2u + 20u) : text_height);
+    layout->x = (DISPLAY_WIDTH - (unsigned)text_width) / 2u;
+    layout->y = (DISPLAY_HEIGHT - (unsigned)layout->height) / 2u;
+}
+
 void display_init(display_framebuffer_t *framebuffer) {
     memset(framebuffer, 0, sizeof(*framebuffer));
     framebuffer->width = DISPLAY_WIDTH;
@@ -141,18 +181,6 @@ static void display_draw_background(display_framebuffer_t *framebuffer) {
     display_clear(framebuffer, 0x00u);
 }
 
-static int display_measure_text_width(const char *text, int scale) {
-    int width = 0;
-    for (const char *it = text; *it != '\0'; ++it) {
-        if (*it == ' ') {
-            width += 4 * scale;
-        } else {
-            width += 6 * scale;
-        }
-    }
-    return width;
-}
-
 void display_draw_startup(display_framebuffer_t *framebuffer, uint8_t colour) {
     display_draw_background(framebuffer);
     display_draw_rect(framebuffer, 40, 40, DISPLAY_WIDTH - 80u, DISPLAY_HEIGHT - 80u, colour);
@@ -178,29 +206,17 @@ void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buff
 
     display_draw_background(framebuffer);
 
-    const size_t date_length = show_date && date_buffer != NULL ? strlen(date_buffer) : 0u;
-    const size_t longest_length = time_length > date_length ? time_length : date_length;
-    const int max_width_scale = (DISPLAY_WIDTH - 80u) / (int)((longest_length * 6u) - 1u);
-    const int max_height_scale = (DISPLAY_HEIGHT - 80u - (show_date ? 20 : 0)) / (show_date ? 14 : 7);
-    int scale = max_width_scale < max_height_scale ? max_width_scale : max_height_scale;
-    if (scale < 1) {
-        scale = 1;
-    }
+    display_layout_t layout;
+    display_prepare_layout(time_buffer, date_buffer, show_date, &layout);
 
-    const int text_width = (int)((longest_length * 6u - 1u) * (unsigned)scale);
-    const int text_height = 7 * scale;
-    const int x = (DISPLAY_WIDTH - (unsigned)text_width) / 2u;
-    const int block_height = (show_date ? (text_height * 2u + 20u) : text_height);
-    const int y = (DISPLAY_HEIGHT - (unsigned)block_height) / 2u;
+    const int time_x = layout.x + (((int)strlen(time_buffer) * 6u - 1u) * layout.scale - (int)(time_length * 6u - 1u) * layout.scale) / 2;
+    const int time_y = layout.y;
 
-    const int time_x = x + (((int)longest_length * 6u - 1u) * scale - (int)(time_length * 6u - 1u) * scale) / 2;
-    const int time_y = y;
-
-    display_draw_text(framebuffer, time_x, time_y, time_buffer, scale, colour);
-    if (show_date && date_buffer != NULL && date_length != 0u) {
-        const int date_width = (int)((date_length * 6u - 1u) * (unsigned)scale);
-        const int date_x = x + (((int)longest_length * 6u - 1u) * scale - date_width) / 2;
-        const int date_y = time_y + text_height + 20;
-        display_draw_text(framebuffer, date_x, date_y, date_buffer, scale, colour);
+    display_draw_text(framebuffer, time_x, time_y, time_buffer, layout.scale, colour);
+    if (show_date && date_buffer != NULL && strlen(date_buffer) != 0u) {
+        const int date_width = (int)((strlen(date_buffer) * 6u - 1u) * (unsigned)layout.scale);
+        const int date_x = layout.x + (((int)strlen(time_buffer) * 6u - 1u) * layout.scale - date_width) / 2;
+        const int date_y = time_y + 7 * layout.scale + 20;
+        display_draw_text(framebuffer, date_x, date_y, date_buffer, layout.scale, colour);
     }
 }

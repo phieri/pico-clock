@@ -6,6 +6,10 @@
 
 #include "pico/time.h"
 
+static int64_t clock_adjusted_epoch_seconds(uint64_t epoch_seconds, int32_t timezone_offset_seconds) {
+    return (int64_t)epoch_seconds + (int64_t)timezone_offset_seconds;
+}
+
 void clock_init(clock_state_t *state) {
     memset(state, 0, sizeof(*state));
 }
@@ -69,7 +73,7 @@ static void days_to_date(int64_t day_count, unsigned *year, unsigned *month, uns
 }
 
 void clock_format_hms(uint64_t epoch_seconds, int32_t timezone_offset_seconds, char *buffer, size_t size) {
-    int64_t adjusted_seconds = (int64_t)epoch_seconds + (int64_t)timezone_offset_seconds;
+    int64_t adjusted_seconds = clock_adjusted_epoch_seconds(epoch_seconds, timezone_offset_seconds);
     int64_t day_seconds = adjusted_seconds % 86400LL;
     if (day_seconds < 0) {
         day_seconds += 86400LL;
@@ -82,7 +86,7 @@ void clock_format_hms(uint64_t epoch_seconds, int32_t timezone_offset_seconds, c
 }
 
 void clock_format_date(uint64_t epoch_seconds, int32_t timezone_offset_seconds, char *buffer, size_t size) {
-    int64_t adjusted_seconds = (int64_t)epoch_seconds + (int64_t)timezone_offset_seconds;
+    int64_t adjusted_seconds = clock_adjusted_epoch_seconds(epoch_seconds, timezone_offset_seconds);
     int64_t day_seconds = adjusted_seconds % 86400LL;
     int64_t day_count = adjusted_seconds / 86400LL;
     if (day_seconds < 0) {
@@ -112,7 +116,7 @@ bool clock_should_show_date(uint64_t epoch_seconds, int32_t timezone_offset_seco
         return true;
     }
 
-    int64_t adjusted_seconds = (int64_t)epoch_seconds + (int64_t)timezone_offset_seconds;
+    int64_t adjusted_seconds = clock_adjusted_epoch_seconds(epoch_seconds, timezone_offset_seconds);
     int64_t day_seconds = adjusted_seconds % 86400LL;
     if (day_seconds < 0) {
         day_seconds += 86400LL;
