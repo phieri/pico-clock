@@ -301,7 +301,6 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
 
     uint32_t deadline = send_ms + NTP_TIMEOUT_MS;
     while (!receive_state.received && (clock_now_ms() < deadline)) {
-        cyw43_arch_poll();
         sleep_ms(10);
     }
 
@@ -376,7 +375,6 @@ bool wifi_connect(const pico_config_t *config) {
 
     uint32_t scan_deadline = clock_now_ms() + WIFI_CONNECT_TIMEOUT_MS;
     while (!scan_state.scan_complete && (clock_now_ms() < scan_deadline)) {
-        cyw43_arch_poll();
         sleep_ms(50);
     }
 

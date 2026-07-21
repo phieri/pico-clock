@@ -3,12 +3,58 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "pico/multicore.h"
 #include "pico/stdlib.h"
 
 #include "network.h"
 
 #define NTP_SYNC_INTERVAL_MS (30u * 60u * 1000u)
 #define CLOCK_REFRESH_INTERVAL_MS 1000u
+
+static runtime_state_t *s_runtime_state = NULL;
+
+static clock_state_t runtime_read_clock(const runtime_state_t *state) {
+    clock_state_t clock_copy = {0};
+    if (state == NULL) {
+        return clock_copy;
+    }
+
+    uint32_t irq_state = spin_lock_blocking(state->state_lock);
+    clock_copy = state->clock;
+    spin_unlock(state->state_lock, irq_state);
+    return clock_copy;
+}
+
+static pico_config_t runtime_read_config(const runtime_state_t *state) {
+    pico_config_t config_copy = {0};
+    if (state == NULL) {
+        return config_copy;
+    }
+
+    uint32_t irq_state = spin_lock_blocking(state->state_lock);
+    config_copy = state->config;
+    spin_unlock(state->state_lock, irq_state);
+    return config_copy;
+}
+
+static void runtime_write_clock(runtime_state_t *state, const clock_state_t *clock_state) {
+    if (state == NULL || clock_state == NULL) {
+        return;
+    }
+
+    uint32_t irq_state = spin_lock_blocking(state->state_lock);
+    state->clock = *clock_state;
+    spin_unlock(state->state_lock, irq_state);
+}
+
+static bool runtime_should_sync_time(const runtime_state_t *state, uint32_t now) {
+    if (state == NULL) {
+        return false;
+    }
+
+    clock_state_t clock_copy = runtime_read_clock(state);
+    return !clock_copy.has_time || (now - clock_copy.last_sync_ms) > NTP_SYNC_INTERVAL_MS;
+}
 
 static bool process_serial_input(runtime_state_t *state) {
     int ch = getchar_timeout_us(0);
@@ -23,15 +69,20 @@ static bool process_serial_input(runtime_state_t *state) {
 
         state->serial_buffer[state->serial_length] = '\0';
         char response[96];
-        if (config_handle_command(&state->config, state->serial_buffer, response, sizeof(response))) {
+        uint32_t irq_state = spin_lock_blocking(state->state_lock);
+        bool handled = config_handle_command(&state->config, state->serial_buffer, response, sizeof(response));
+        if (handled) {
             if (!config_save(&state->config)) {
                 printf("config save failed\n");
             }
-            printf("%s\n", response);
             state->config_dirty = true;
+            state->wifi_ready = false;
+            printf("%s\n", response);
         } else {
             printf("%s\n", response);
         }
+        spin_unlock(state->state_lock, irq_state);
+
         state->serial_length = 0u;
         return true;
     }
@@ -44,49 +95,80 @@ static bool process_serial_input(runtime_state_t *state) {
 
 static void refresh_clock_display(runtime_state_t *state) {
     uint32_t now = clock_now_ms();
-    uint64_t epoch = clock_current_epoch_seconds(&state->clock, now);
+    clock_state_t clock_copy = runtime_read_clock(state);
+    uint64_t epoch = clock_current_epoch_seconds(&clock_copy, now);
     char time_buffer[16];
     char date_buffer[24];
-    int32_t timezone_offset_seconds = state->config.timezone_set ? state->config.timezone_offset_seconds : 0;
+    pico_config_t config_copy = runtime_read_config(state);
+    int32_t timezone_offset_seconds = config_copy.timezone_set ? config_copy.timezone_offset_seconds : 0;
     bool show_date = false;
     clock_format_hms(epoch, timezone_offset_seconds, time_buffer, sizeof(time_buffer));
-    if (state->config.date_display_mode == PICO_DATE_DISPLAY_ON) {
+    if (config_copy.date_display_mode == PICO_DATE_DISPLAY_ON) {
         show_date = true;
-    } else if (state->config.date_display_mode == PICO_DATE_DISPLAY_AUTO) {
-        show_date = clock_should_show_date(epoch, timezone_offset_seconds, state->config.date_display_mode);
+    } else if (config_copy.date_display_mode == PICO_DATE_DISPLAY_AUTO) {
+        show_date = clock_should_show_date(epoch, timezone_offset_seconds, config_copy.date_display_mode);
     }
     if (show_date) {
         clock_format_date(epoch, timezone_offset_seconds, date_buffer, sizeof(date_buffer));
     }
     display_draw_time(&state->display, time_buffer, show_date ? date_buffer : NULL, show_date,
-                      state->config.clock_colour_set ? state->config.clock_colour : 0xFFu);
+                      config_copy.clock_colour_set ? config_copy.clock_colour : 0xFFu);
 }
 
 static void render_runtime_view(runtime_state_t *state) {
-    if (!state->clock.has_time) {
-        display_draw_startup(&state->display, state->config.clock_colour_set ? state->config.clock_colour : 0xFFu);
+    clock_state_t clock_copy = runtime_read_clock(state);
+    if (!clock_copy.has_time) {
+        pico_config_t config_copy = runtime_read_config(state);
+        display_draw_startup(&state->display, config_copy.clock_colour_set ? config_copy.clock_colour : 0xFFu);
     } else {
         refresh_clock_display(state);
     }
 }
 
-static bool ensure_network_ready(runtime_state_t *state) {
-    if (state->wifi_ready) {
-        return true;
+static void core1_network_worker(void) {
+    runtime_state_t *state = s_runtime_state;
+    if (state == NULL) {
+        return;
     }
 
-    state->wifi_ready = wifi_connect(&state->config);
-    if (!state->wifi_ready) {
-        sleep_ms(5000);
-        return false;
-    }
+    while (true) {
+        bool config_dirty = false;
+        bool wifi_ready = false;
+        uint32_t irq_state = spin_lock_blocking(state->state_lock);
+        config_dirty = state->config_dirty;
+        wifi_ready = state->wifi_ready;
+        spin_unlock(state->state_lock, irq_state);
 
-    return true;
-}
+        if (config_dirty) {
+            irq_state = spin_lock_blocking(state->state_lock);
+            state->config_dirty = false;
+            state->wifi_ready = false;
+            spin_unlock(state->state_lock, irq_state);
+        }
 
-static void sync_time_if_needed(runtime_state_t *state) {
-    if (!state->clock.has_time || (clock_now_ms() - state->clock.last_sync_ms) > NTP_SYNC_INTERVAL_MS) {
-        ntp_sync(&state->clock, &state->config);
+        if (!wifi_ready) {
+            pico_config_t config_copy = runtime_read_config(state);
+            bool connected = wifi_connect(&config_copy);
+            irq_state = spin_lock_blocking(state->state_lock);
+            state->wifi_ready = connected;
+            spin_unlock(state->state_lock, irq_state);
+            if (!connected) {
+                sleep_ms(5000);
+                continue;
+            }
+        }
+
+        uint32_t now = clock_now_ms();
+        if (runtime_should_sync_time(state, now)) {
+            pico_config_t config_copy = runtime_read_config(state);
+            clock_state_t clock_copy = runtime_read_clock(state);
+            clock_state_t synced_clock = clock_copy;
+            if (ntp_sync(&synced_clock, &config_copy)) {
+                runtime_write_clock(state, &synced_clock);
+            }
+        }
+
+        sleep_ms(1000);
     }
 }
 
@@ -97,12 +179,17 @@ void runtime_state_init(runtime_state_t *state) {
 
     memset(state, 0, sizeof(*state));
     stdio_init_all();
+    spin_lock_init(&state->state_lock);
     clock_init(&state->clock);
     display_init(&state->display);
     config_init(&state->config);
     if (!config_load(&state->config)) {
         printf("config load failed; using defaults\n");
     }
+
+    s_runtime_state = state;
+    multicore_reset_core1();
+    multicore_launch_core1(core1_network_worker);
 }
 
 void runtime_run(runtime_state_t *state) {
@@ -112,19 +199,6 @@ void runtime_run(runtime_state_t *state) {
 
     while (true) {
         process_serial_input(state);
-
-        if (state->config_dirty) {
-            state->config_dirty = false;
-            state->wifi_ready = false;
-        }
-
-        render_runtime_view(state);
-
-        if (!ensure_network_ready(state)) {
-            continue;
-        }
-
-        sync_time_if_needed(state);
         render_runtime_view(state);
         sleep_ms(CLOCK_REFRESH_INTERVAL_MS);
     }

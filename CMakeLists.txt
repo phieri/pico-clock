@@ -48,13 +48,14 @@ target_include_directories(pico_clock PRIVATE
 )
 
 target_compile_definitions(pico_clock PRIVATE
-  PICO_CYW43_ARCH_HEADER=pico/cyw43_arch/arch_poll.h
+  PICO_CYW43_ARCH_HEADER=pico/cyw43_arch/arch_threadsafe_background.h
 )
 
 target_link_libraries(pico_clock
   pico_stdlib
   pico_time
-  pico_cyw43_arch_lwip_poll
+  pico_multicore
+  pico_cyw43_arch_lwip_threadsafe_background
   pico_lwip_nosys
   hardware_flash
   littlefs

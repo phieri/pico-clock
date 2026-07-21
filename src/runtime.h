@@ -7,6 +7,7 @@
 #include "clock.h"
 #include "config.h"
 #include "display.h"
+#include "hardware/sync.h"
 
 #define RUNTIME_SERIAL_BUFFER_SIZE 160u
 
@@ -18,6 +19,7 @@ typedef struct {
     size_t serial_length;
     bool wifi_ready;
     bool config_dirty;
+    spin_lock_t state_lock;
 } runtime_state_t;
 
 void runtime_state_init(runtime_state_t *state);
