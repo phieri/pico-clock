@@ -331,40 +331,35 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
     return true;
 }
 
-bool wifi_connect(const pico_config_t *config) {
-    if (config == NULL) {
-        return false;
-    }
-
-    const bool configured = config->wifi_configured && config->wifi_ssid[0] != '\0';
-    const char *ssid = configured ? config->wifi_ssid : "";
-    const char *password = configured ? config->wifi_password : "";
-
+static bool wifi_initialise_network_stack(void) {
     if (cyw43_arch_init()) {
         printf("cyw43 init failed\n");
         return false;
     }
 
     cyw43_arch_enable_sta_mode();
+    return true;
+}
 
-    if (configured) {
-        const bool use_open_wifi_probe = (password[0] == '\0');
-        uint32_t auth_type = (password[0] != '\0') ? CYW43_AUTH_WPA3_WPA2_AES_PSK : CYW43_AUTH_OPEN;
-        if (cyw43_arch_wifi_connect_timeout_ms(ssid, password, auth_type, WIFI_CONNECT_TIMEOUT_MS)) {
-            printf("wifi connect failed\n");
-            cyw43_arch_deinit();
-            return false;
-        }
-
-        printf("wifi connected\n");
-        if (use_open_wifi_probe && !captive_portal_check()) {
-            printf("captive portal probe failed; delaying reconnect\n");
-            cyw43_arch_deinit();
-            return false;
-        }
-        return true;
+static bool wifi_connect_with_credentials(const char *ssid, const char *password) {
+    const bool use_open_wifi_probe = (password[0] == '\0');
+    uint32_t auth_type = (password[0] != '\0') ? CYW43_AUTH_WPA3_WPA2_AES_PSK : CYW43_AUTH_OPEN;
+    if (cyw43_arch_wifi_connect_timeout_ms(ssid, password, auth_type, WIFI_CONNECT_TIMEOUT_MS)) {
+        printf("wifi connect failed\n");
+        cyw43_arch_deinit();
+        return false;
     }
 
+    printf("wifi connected\n");
+    if (use_open_wifi_probe && !captive_portal_check()) {
+        printf("captive portal probe failed; delaying reconnect\n");
+        cyw43_arch_deinit();
+        return false;
+    }
+    return true;
+}
+
+static bool wifi_connect_via_scan(void) {
     wifi_scan_state_t scan_state = {0};
     int scan_err = cyw43_wifi_scan(&cyw43_state, NULL, &scan_state, wifi_scan_result_cb);
     if (scan_err != 0) {
@@ -399,6 +394,26 @@ bool wifi_connect(const pico_config_t *config) {
 
     cyw43_arch_deinit();
     return false;
+}
+
+bool wifi_connect(const pico_config_t *config) {
+    if (config == NULL) {
+        return false;
+    }
+
+    const bool configured = config->wifi_configured && config->wifi_ssid[0] != '\0';
+    const char *ssid = configured ? config->wifi_ssid : "";
+    const char *password = configured ? config->wifi_password : "";
+
+    if (!wifi_initialise_network_stack()) {
+        return false;
+    }
+
+    if (configured) {
+        return wifi_connect_with_credentials(ssid, password);
+    }
+
+    return wifi_connect_via_scan();
 }
 
 bool ntp_sync(clock_state_t *state, const pico_config_t *config) {

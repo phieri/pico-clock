@@ -13,15 +13,40 @@
 
 static runtime_state_t *s_runtime_state = NULL;
 
+static uint32_t runtime_lock_state(runtime_state_t *state) {
+    if (state == NULL) {
+        return 0u;
+    }
+    return spin_lock_blocking(state->state_lock);
+}
+
+static void runtime_unlock_state(runtime_state_t *state, uint32_t irq_state) {
+    if (state == NULL) {
+        return;
+    }
+    spin_unlock(state->state_lock, irq_state);
+}
+
+static void runtime_set_network_flags(runtime_state_t *state, bool config_dirty, bool wifi_ready) {
+    if (state == NULL) {
+        return;
+    }
+
+    uint32_t irq_state = runtime_lock_state(state);
+    state->config_dirty = config_dirty;
+    state->wifi_ready = wifi_ready;
+    runtime_unlock_state(state, irq_state);
+}
+
 static clock_state_t runtime_read_clock(const runtime_state_t *state) {
     clock_state_t clock_copy = {0};
     if (state == NULL) {
         return clock_copy;
     }
 
-    uint32_t irq_state = spin_lock_blocking(state->state_lock);
+    uint32_t irq_state = runtime_lock_state((runtime_state_t *)state);
     clock_copy = state->clock;
-    spin_unlock(state->state_lock, irq_state);
+    runtime_unlock_state((runtime_state_t *)state, irq_state);
     return clock_copy;
 }
 
@@ -31,9 +56,9 @@ static pico_config_t runtime_read_config(const runtime_state_t *state) {
         return config_copy;
     }
 
-    uint32_t irq_state = spin_lock_blocking(state->state_lock);
+    uint32_t irq_state = runtime_lock_state((runtime_state_t *)state);
     config_copy = state->config;
-    spin_unlock(state->state_lock, irq_state);
+    runtime_unlock_state((runtime_state_t *)state, irq_state);
     return config_copy;
 }
 
@@ -42,9 +67,9 @@ static void runtime_write_clock(runtime_state_t *state, const clock_state_t *clo
         return;
     }
 
-    uint32_t irq_state = spin_lock_blocking(state->state_lock);
+    uint32_t irq_state = runtime_lock_state(state);
     state->clock = *clock_state;
-    spin_unlock(state->state_lock, irq_state);
+    runtime_unlock_state(state, irq_state);
 }
 
 static bool runtime_should_sync_time(const runtime_state_t *state, uint32_t now) {
@@ -69,7 +94,7 @@ static bool process_serial_input(runtime_state_t *state) {
 
         state->serial_buffer[state->serial_length] = '\0';
         char response[96];
-        uint32_t irq_state = spin_lock_blocking(state->state_lock);
+        uint32_t irq_state = runtime_lock_state(state);
         bool handled = config_handle_command(&state->config, state->serial_buffer, response, sizeof(response));
         if (handled) {
             if (!config_save(&state->config)) {
@@ -81,7 +106,7 @@ static bool process_serial_input(runtime_state_t *state) {
         } else {
             printf("%s\n", response);
         }
-        spin_unlock(state->state_lock, irq_state);
+        runtime_unlock_state(state, irq_state);
 
         state->serial_length = 0u;
         return true;
@@ -134,24 +159,19 @@ static void core1_network_worker(void) {
     while (true) {
         bool config_dirty = false;
         bool wifi_ready = false;
-        uint32_t irq_state = spin_lock_blocking(state->state_lock);
+        uint32_t irq_state = runtime_lock_state(state);
         config_dirty = state->config_dirty;
         wifi_ready = state->wifi_ready;
-        spin_unlock(state->state_lock, irq_state);
+        runtime_unlock_state(state, irq_state);
 
         if (config_dirty) {
-            irq_state = spin_lock_blocking(state->state_lock);
-            state->config_dirty = false;
-            state->wifi_ready = false;
-            spin_unlock(state->state_lock, irq_state);
+            runtime_set_network_flags(state, false, false);
         }
 
         if (!wifi_ready) {
             pico_config_t config_copy = runtime_read_config(state);
             bool connected = wifi_connect(&config_copy);
-            irq_state = spin_lock_blocking(state->state_lock);
-            state->wifi_ready = connected;
-            spin_unlock(state->state_lock, irq_state);
+            runtime_set_network_flags(state, false, connected);
             if (!connected) {
                 sleep_ms(5000);
                 continue;

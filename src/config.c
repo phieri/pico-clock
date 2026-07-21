@@ -435,6 +435,76 @@ static bool config_handle_wifi_command(pico_config_t *config, const char *value,
     return true;
 }
 
+static bool config_apply_timezone(pico_config_t *config, const char *value, char *response, size_t response_size) {
+    if (value[0] == '\0') {
+        snprintf(response, response_size, "timezone unset");
+        config->timezone_set = false;
+        return true;
+    }
+    int32_t offset_seconds = 0;
+    if (!parse_timezone_offset(value, &offset_seconds)) {
+        snprintf(response, response_size, "invalid timezone");
+        return false;
+    }
+    config->timezone_set = true;
+    config->timezone_offset_seconds = offset_seconds;
+    snprintf(response, response_size, "timezone set to %ld seconds", (long)offset_seconds);
+    return true;
+}
+
+static bool config_apply_colour(pico_config_t *config, const char *value, char *response, size_t response_size) {
+    if (value[0] == '\0') {
+        snprintf(response, response_size, "color unset");
+        config->clock_colour_set = false;
+        return true;
+    }
+    uint8_t colour = 0;
+    if (!parse_colour(value, &colour)) {
+        snprintf(response, response_size, "invalid color");
+        return false;
+    }
+    config->clock_colour_set = true;
+    config->clock_colour = colour;
+    snprintf(response, response_size, "color set to %u", (unsigned)colour);
+    return true;
+}
+
+static bool config_apply_date_mode(pico_config_t *config, const char *value, char *response, size_t response_size) {
+    if (value[0] == '\0') {
+        config->date_display_mode = PICO_DATE_DISPLAY_OFF;
+        snprintf(response, response_size, "date display set to off");
+        return true;
+    }
+
+    pico_date_display_mode_t date_display_mode = PICO_DATE_DISPLAY_OFF;
+    if (!parse_date_display_mode(value, &date_display_mode)) {
+        snprintf(response, response_size, "invalid date mode");
+        return false;
+    }
+
+    config->date_display_mode = date_display_mode;
+    const char *date_mode_name = "off";
+    if (date_display_mode == PICO_DATE_DISPLAY_ON) {
+        date_mode_name = "on";
+    } else if (date_display_mode == PICO_DATE_DISPLAY_AUTO) {
+        date_mode_name = "auto";
+    }
+    snprintf(response, response_size, "date display set to %s", date_mode_name);
+    return true;
+}
+
+static bool config_apply_ntp_server(pico_config_t *config, const char *value, char *response, size_t response_size) {
+    if (value[0] == '\0') {
+        snprintf(response, response_size, "ntp unset");
+        config->ntp_server_set = false;
+        return true;
+    }
+    config->ntp_server_set = true;
+    copy_string(config->ntp_server, sizeof(config->ntp_server), value);
+    snprintf(response, response_size, "ntp server set to %s", config->ntp_server);
+    return true;
+}
+
 bool config_handle_command(pico_config_t *config, const char *line, char *response, size_t response_size) {
     if (config == NULL || line == NULL || response == NULL || response_size == 0) {
         return false;
@@ -453,37 +523,11 @@ bool config_handle_command(pico_config_t *config, const char *line, char *respon
     char command_lower[32];
     lowercase_copy(command_lower, sizeof(command_lower), command);
     if (strcmp(command_lower, "timezone") == 0 || strcmp(command_lower, "tz") == 0) {
-        if (value[0] == '\0') {
-            snprintf(response, response_size, "timezone unset");
-            config->timezone_set = false;
-            return true;
-        }
-        int32_t offset_seconds = 0;
-        if (!parse_timezone_offset(value, &offset_seconds)) {
-            snprintf(response, response_size, "invalid timezone");
-            return false;
-        }
-        config->timezone_set = true;
-        config->timezone_offset_seconds = offset_seconds;
-        snprintf(response, response_size, "timezone set to %ld seconds", (long)offset_seconds);
-        return true;
+        return config_apply_timezone(config, value, response, response_size);
     }
 
     if (strcmp(command_lower, "color") == 0 || strcmp(command_lower, "colour") == 0) {
-        if (value[0] == '\0') {
-            snprintf(response, response_size, "color unset");
-            config->clock_colour_set = false;
-            return true;
-        }
-        uint8_t colour = 0;
-        if (!parse_colour(value, &colour)) {
-            snprintf(response, response_size, "invalid color");
-            return false;
-        }
-        config->clock_colour_set = true;
-        config->clock_colour = colour;
-        snprintf(response, response_size, "color set to %u", (unsigned)colour);
-        return true;
+        return config_apply_colour(config, value, response, response_size);
     }
 
     if (strcmp(command_lower, "wifi") == 0) {
@@ -491,39 +535,11 @@ bool config_handle_command(pico_config_t *config, const char *line, char *respon
     }
 
     if (strcmp(command_lower, "date") == 0 || strcmp(command_lower, "showdate") == 0) {
-        if (value[0] == '\0') {
-            config->date_display_mode = PICO_DATE_DISPLAY_OFF;
-            snprintf(response, response_size, "date display set to off");
-            return true;
-        }
-
-        pico_date_display_mode_t date_display_mode = PICO_DATE_DISPLAY_OFF;
-        if (!parse_date_display_mode(value, &date_display_mode)) {
-            snprintf(response, response_size, "invalid date mode");
-            return false;
-        }
-
-        config->date_display_mode = date_display_mode;
-        const char *date_mode_name = "off";
-        if (date_display_mode == PICO_DATE_DISPLAY_ON) {
-            date_mode_name = "on";
-        } else if (date_display_mode == PICO_DATE_DISPLAY_AUTO) {
-            date_mode_name = "auto";
-        }
-        snprintf(response, response_size, "date display set to %s", date_mode_name);
-        return true;
+        return config_apply_date_mode(config, value, response, response_size);
     }
 
     if (strcmp(command_lower, "ntp") == 0) {
-        if (value[0] == '\0') {
-            snprintf(response, response_size, "ntp unset");
-            config->ntp_server_set = false;
-            return true;
-        }
-        config->ntp_server_set = true;
-        copy_string(config->ntp_server, sizeof(config->ntp_server), value);
-        snprintf(response, response_size, "ntp server set to %s", config->ntp_server);
-        return true;
+        return config_apply_ntp_server(config, value, response, response_size);
     }
 
     if (strcmp(command_lower, "reset") == 0) {
