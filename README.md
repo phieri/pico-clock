@@ -11,6 +11,7 @@ A Raspberry Pi Pico 2 W firmware project for a compact network clock. The firmwa
 - Prefers IPv6 NTP resolution with IPv4 fallback and retries against multiple servers.
 - Tracks boot-time drift and subsequent time corrections.
 - Renders the current time and drift information in a framebuffer display loop.
+- Moves Wi-Fi connection and NTP synchronization work onto the Pico's second core so the main loop stays focused on display updates and serial handling.
 
 ## Project layout
 - `src/main.c` is the firmware entry point.
