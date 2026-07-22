@@ -81,11 +81,49 @@ static bool runtime_should_sync_time(const runtime_state_t *state, uint32_t now)
     return !clock_copy.has_time || (now - clock_copy.last_sync_ms) > NTP_SYNC_INTERVAL_MS;
 }
 
+static bool runtime_update_startup_config_window(runtime_state_t *state, uint32_t now) {
+    if (state == NULL) {
+        return false;
+    }
+
+    uint32_t irq_state = runtime_lock_state(state);
+    if (state->startup_config_window_active && now >= state->startup_config_deadline_ms) {
+        state->startup_config_window_active = false;
+        printf("serial configuration window closed; beginning time acquisition\n");
+    }
+    bool active = state->startup_config_window_active;
+    runtime_unlock_state(state, irq_state);
+    return active;
+}
+
+static void runtime_extend_startup_config_window(runtime_state_t *state, uint32_t now) {
+    if (state == NULL) {
+        return;
+    }
+
+    uint32_t irq_state = runtime_lock_state(state);
+    if (state->startup_config_window_active) {
+        state->startup_config_deadline_ms = now + STARTUP_CONFIG_DELAY_MS;
+    }
+    runtime_unlock_state(state, irq_state);
+}
+
 static bool process_serial_input(runtime_state_t *state) {
+    if (state == NULL) {
+        return false;
+    }
+
+    uint32_t now = clock_now_ms();
+    if (!runtime_update_startup_config_window(state, now)) {
+        return false;
+    }
+
     int ch = getchar_timeout_us(0);
     if (ch == PICO_ERROR_TIMEOUT) {
         return false;
     }
+
+    runtime_extend_startup_config_window(state, clock_now_ms());
 
     if (ch == '\r' || ch == '\n') {
         if (state->serial_length == 0u) {
@@ -179,7 +217,7 @@ static void core1_network_worker(void) {
         }
 
         uint32_t now = clock_now_ms();
-        if (runtime_should_sync_time(state, now)) {
+        if (runtime_update_startup_config_window(state, now) && runtime_should_sync_time(state, now)) {
             pico_config_t config_copy = runtime_read_config(state);
             clock_state_t clock_copy = runtime_read_clock(state);
             clock_state_t synced_clock = clock_copy;
@@ -203,6 +241,9 @@ void runtime_state_init(runtime_state_t *state) {
     clock_init(&state->clock);
     display_init(&state->display);
     config_init(&state->config);
+    state->startup_config_window_active = true;
+    state->startup_config_deadline_ms = clock_now_ms() + STARTUP_CONFIG_DELAY_MS;
+    printf("startup configuration window active for %lu seconds\n", (unsigned long)(STARTUP_CONFIG_DELAY_MS / 1000u));
     if (!config_load(&state->config)) {
         printf("config load failed; using defaults\n");
     }
