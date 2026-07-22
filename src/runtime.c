@@ -27,6 +27,23 @@ static void runtime_unlock_state(runtime_state_t *state, uint32_t irq_state) {
     spin_unlock(state->state_lock, irq_state);
 }
 
+static void runtime_copy_string(char *dst, size_t size, const char *src) {
+    if (dst == NULL || size == 0u) {
+        return;
+    }
+    if (src == NULL) {
+        dst[0] = '\0';
+        return;
+    }
+
+    size_t length = strlen(src);
+    if (length >= size) {
+        length = size - 1u;
+    }
+    memcpy(dst, src, length);
+    dst[length] = '\0';
+}
+
 static void runtime_set_network_flags(runtime_state_t *state, bool config_dirty, bool wifi_ready) {
     if (state == NULL) {
         return;
@@ -36,6 +53,17 @@ static void runtime_set_network_flags(runtime_state_t *state, bool config_dirty,
     state->config_dirty = config_dirty;
     state->wifi_ready = wifi_ready;
     runtime_unlock_state(state, irq_state);
+}
+
+static bool runtime_is_wifi_ready(const runtime_state_t *state) {
+    if (state == NULL) {
+        return false;
+    }
+
+    uint32_t irq_state = runtime_lock_state((runtime_state_t *)state);
+    bool ready = state->wifi_ready;
+    runtime_unlock_state((runtime_state_t *)state, irq_state);
+    return ready;
 }
 
 static clock_state_t runtime_read_clock(const runtime_state_t *state) {
@@ -162,6 +190,7 @@ static void refresh_clock_display(runtime_state_t *state) {
     uint64_t epoch = clock_current_epoch_seconds(&clock_copy, now);
     char time_buffer[16];
     char date_buffer[24];
+    char status_buffer[16];
     pico_config_t config_copy = runtime_read_config(state);
     int32_t timezone_offset_seconds = config_copy.timezone_set ? config_copy.timezone_offset_seconds : 0;
     bool show_date = false;
@@ -174,7 +203,14 @@ static void refresh_clock_display(runtime_state_t *state) {
     if (show_date) {
         clock_format_date(epoch, timezone_offset_seconds, date_buffer, sizeof(date_buffer));
     }
-    display_draw_time(&state->display, time_buffer, show_date ? date_buffer : NULL, show_date,
+    if (!runtime_is_wifi_ready(state)) {
+        runtime_copy_string(status_buffer, sizeof(status_buffer), "SYNC");
+    } else if (!clock_copy.has_time) {
+        runtime_copy_string(status_buffer, sizeof(status_buffer), "WAIT");
+    } else {
+        runtime_copy_string(status_buffer, sizeof(status_buffer), "NTP");
+    }
+    display_draw_time(&state->display, time_buffer, show_date ? date_buffer : NULL, show_date, status_buffer,
                       config_copy.clock_colour_set ? config_copy.clock_colour : 0xFFu);
 }
 

@@ -42,6 +42,8 @@ static void draw_glyph(display_framebuffer_t *framebuffer, int x, int y, char ch
         {0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000}, // P
         {0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110}, // U
         {0b10001, 0b10001, 0b01010, 0b00100, 0b00100, 0b00100, 0b00100}, // Y
+        {0b10001, 0b10101, 0b10101, 0b10101, 0b10101, 0b11011, 0b10001}, // W
+        {0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111}, // E
     };
 
     int glyph_index = -1;
@@ -84,6 +86,10 @@ static void draw_glyph(display_framebuffer_t *framebuffer, int x, int y, char ch
             case 'u': glyph_index = 27; break;
             case 'Y':
             case 'y': glyph_index = 28; break;
+            case 'W':
+            case 'w': glyph_index = 29; break;
+            case 'E':
+            case 'e': glyph_index = 30; break;
             default: return;
         }
     }
@@ -128,8 +134,9 @@ static void display_prepare_layout(const char *time_buffer, const char *date_buf
 
     const int text_width = (int)((longest_length * 6u - 1u) * (unsigned)layout->scale);
     const int text_height = 7 * layout->scale;
+    const int status_height = 7;
     layout->width = text_width;
-    layout->height = (show_date ? (text_height * 2u + 20u) : text_height);
+    layout->height = (show_date ? (text_height * 2u + 20u) : text_height) + 20u + status_height;
     layout->x = (DISPLAY_WIDTH - (unsigned)text_width) / 2u;
     layout->y = (DISPLAY_HEIGHT - (unsigned)layout->height) / 2u;
 }
@@ -198,7 +205,7 @@ void display_draw_startup(display_framebuffer_t *framebuffer, uint8_t colour) {
     display_draw_text(framebuffer, subtitle_x, 330, subtitle, subtitle_scale, colour);
 }
 
-void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buffer, const char *date_buffer, bool show_date, uint8_t colour) {
+void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buffer, const char *date_buffer, bool show_date, const char *status_buffer, uint8_t colour) {
     const size_t time_length = strlen(time_buffer);
     if (time_length == 0u) {
         return;
@@ -218,5 +225,14 @@ void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buff
         const int date_x = layout.x + (((int)strlen(time_buffer) * 6u - 1u) * layout.scale - date_width) / 2;
         const int date_y = time_y + 7 * layout.scale + 20;
         display_draw_text(framebuffer, date_x, date_y, date_buffer, layout.scale, colour);
+    }
+
+    if (status_buffer != NULL && status_buffer[0] != '\0') {
+        const int status_width = display_measure_text_width(status_buffer, 1);
+        const int status_x = layout.x + (((int)strlen(time_buffer) * 6u - 1u) * layout.scale - status_width) / 2;
+        const int status_y = (show_date && date_buffer != NULL && strlen(date_buffer) != 0u)
+            ? (time_y + 7 * layout.scale + 20 + 7 * layout.scale + 10)
+            : (time_y + 7 * layout.scale + 10);
+        display_draw_text(framebuffer, status_x, status_y, status_buffer, 1, colour);
     }
 }

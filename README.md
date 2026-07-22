@@ -10,7 +10,7 @@ A Raspberry Pi Pico 2 W firmware project for a compact network clock. The firmwa
 - Connects to open Wi-Fi networks and skips captive-portal probing for password-protected networks. When probing an open network, it tries a small set of common captive-portal endpoints to bypass portal-style redirects.
 - Prefers IPv6 NTP resolution with IPv4 fallback and retries against multiple servers.
 - Tracks boot-time drift and subsequent time corrections.
-- Renders the current time and drift information in a framebuffer display loop.
+- Renders the current time, date mode, and a compact sync-status line in a framebuffer display loop.
 - Moves Wi-Fi connection and NTP synchronization work onto the Pico's second core so the main loop stays focused on display updates and serial handling.
 
 ## Project layout
