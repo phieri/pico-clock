@@ -10,6 +10,7 @@
 #include "hardware/sync.h"
 
 #define RUNTIME_SERIAL_BUFFER_SIZE 160u
+#define STARTUP_CONFIG_DELAY_MS (30u * 1000u)
 
 typedef struct {
     clock_state_t clock;
@@ -19,6 +20,8 @@ typedef struct {
     size_t serial_length;
     bool wifi_ready;
     bool config_dirty;
+    bool startup_config_window_active;
+    uint32_t startup_config_deadline_ms;
     spin_lock_t state_lock;
 } runtime_state_t;
 
