@@ -13,6 +13,7 @@
 
 #include "lwip/inet.h"
 #include "lwip/ip_addr.h"
+#include "lwip/netif.h"
 #include "lwip/pbuf.h"
 #include "lwip/udp.h"
 
@@ -331,13 +332,26 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
     return true;
 }
 
-static bool wifi_initialise_network_stack(void) {
+static void network_apply_hostname(const pico_config_t *config) {
+    struct netif *netif = netif_default;
+    if (netif == NULL) {
+        return;
+    }
+
+    const char *hostname = config != NULL && config->hostname[0] != '\0' ? config->hostname : PICO_DEFAULT_HOSTNAME;
+    cyw43_arch_lwip_begin();
+    netif_set_hostname(netif, hostname);
+    cyw43_arch_lwip_end();
+}
+
+static bool wifi_initialise_network_stack(const pico_config_t *config) {
     if (cyw43_arch_init()) {
         printf("cyw43 init failed\n");
         return false;
     }
 
     cyw43_arch_enable_sta_mode();
+    network_apply_hostname(config);
     return true;
 }
 
@@ -405,7 +419,7 @@ bool wifi_connect(const pico_config_t *config) {
     const char *ssid = configured ? config->wifi_ssid : "";
     const char *password = configured ? config->wifi_password : "";
 
-    if (!wifi_initialise_network_stack()) {
+    if (!wifi_initialise_network_stack(config)) {
         return false;
     }
 

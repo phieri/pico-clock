@@ -49,6 +49,7 @@ target_include_directories(pico_clock PRIVATE
 
 target_compile_definitions(pico_clock PRIVATE
   PICO_CYW43_ARCH_HEADER=pico/cyw43_arch/arch_threadsafe_background.h
+  LWIP_NETIF_HOSTNAME=1
 )
 
 target_link_libraries(pico_clock
