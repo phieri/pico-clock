@@ -223,6 +223,51 @@ static uint64_t ntp_timestamp_to_epoch_ms(uint32_t seconds, uint32_t fraction) {
     return (epoch_seconds * 1000ULL) + fractional_ms;
 }
 
+static uint8_t ntp_packet_version(const ntp_packet_t *packet) {
+    if (packet == NULL) {
+        return 0u;
+    }
+    return (uint8_t)((packet->li_vn_mode >> 3u) & 0x7u);
+}
+
+static uint8_t ntp_packet_mode(const ntp_packet_t *packet) {
+    if (packet == NULL) {
+        return 0u;
+    }
+    return (uint8_t)(packet->li_vn_mode & 0x7u);
+}
+
+static bool ntp_packet_is_kiss_o_death(const ntp_packet_t *packet) {
+    return packet != NULL && ntp_packet_mode(packet) == 5u && packet->stratum == 0u;
+}
+
+static bool ntp_packet_is_valid_response(const ntp_packet_t *packet) {
+    return packet != NULL && ntp_packet_version(packet) == 4u && ntp_packet_mode(packet) == 4u;
+}
+
+static void ntp_format_reference_id(const ntp_packet_t *packet, char *buffer, size_t size) {
+    if (buffer == NULL || size == 0u) {
+        return;
+    }
+
+    buffer[0] = '\0';
+    if (packet == NULL) {
+        return;
+    }
+
+    const uint8_t *raw_ref_id = (const uint8_t *)&packet->ref_id;
+    size_t index = 0;
+    while (index + 1u < size) {
+        unsigned char ch = raw_ref_id[index];
+        buffer[index] = isprint(ch) ? (char)ch : '?';
+        if (ch == '\0') {
+            break;
+        }
+        ++index;
+    }
+    buffer[(index < size) ? index : (size - 1u)] = '\0';
+}
+
 static void ntp_epoch_ms_to_timestamp(uint64_t epoch_ms, uint32_t *seconds, uint32_t *fraction) {
     if (seconds == NULL || fraction == NULL) {
         return;
@@ -313,7 +358,27 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
         return false;
     }
 
+    if (receive_state.length < sizeof(ntp_packet_t)) {
+        printf("ntp receive truncated for %s\n", server);
+        return false;
+    }
+
     ntp_packet_t *ntp = (ntp_packet_t *)receive_state.payload;
+    if (ntp_packet_is_kiss_o_death(ntp)) {
+        char reference_id[5] = {0};
+        ntp_format_reference_id(ntp, reference_id, sizeof(reference_id));
+        printf("ntp server %s returned kiss-o'-death (%s)\n", server, reference_id);
+        return false;
+    }
+
+    if (!ntp_packet_is_valid_response(ntp)) {
+        printf("ntp server %s returned invalid response (mode=%u version=%u)\n",
+               server,
+               (unsigned)ntp_packet_mode(ntp),
+               (unsigned)ntp_packet_version(ntp));
+        return false;
+    }
+
     uint64_t server_tx_epoch_ms = ntp_timestamp_to_epoch_ms(ntohl(ntp->tx_tm_s), ntohl(ntp->tx_tm_f));
     uint64_t server_rx_epoch_ms = ntp_timestamp_to_epoch_ms(ntohl(ntp->rx_tm_s), ntohl(ntp->rx_tm_f));
     uint64_t response_orig_epoch_ms = ntp_timestamp_to_epoch_ms(ntohl(ntp->orig_tm_s), ntohl(ntp->orig_tm_f));
