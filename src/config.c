@@ -19,7 +19,7 @@
 #define CONFIG_FILE_NAME "/config.bin"
 
 #define CONFIG_MAGIC 0x50434f4eUL
-#define CONFIG_VERSION 2u
+#define CONFIG_VERSION 3u
 
 typedef struct {
     uint32_t magic;
@@ -48,6 +48,7 @@ typedef struct {
     uint8_t ntp_server_set;
     char ntp_server[64];
     uint8_t date_display_mode;
+    char hostname[33];
 } persisted_config_t;
 
 typedef struct {
@@ -122,7 +123,9 @@ static void config_apply_defaults(pico_config_t *config) {
     config->wifi_password[0] = '\0';
     config->ntp_server[0] = '\0';
     config->date_display_mode = PICO_DATE_DISPLAY_OFF;
+    config->hostname[0] = '\0';
     copy_string(config->ntp_server, sizeof(config->ntp_server), "2001:4860:4860::8888,216.239.35.0");
+    copy_string(config->hostname, sizeof(config->hostname), PICO_DEFAULT_HOSTNAME);
 }
 
 static void config_load_legacy_persisted(const persisted_config_v1_t *persisted, pico_config_t *config) {
@@ -140,6 +143,7 @@ static void config_load_legacy_persisted(const persisted_config_v1_t *persisted,
     config->ntp_server_set = persisted->ntp_server_set != 0;
     copy_string(config->ntp_server, sizeof(config->ntp_server), persisted->ntp_server);
     config->date_display_mode = PICO_DATE_DISPLAY_OFF;
+    copy_string(config->hostname, sizeof(config->hostname), PICO_DEFAULT_HOSTNAME);
 }
 
 static void config_load_persisted(const persisted_config_t *persisted, pico_config_t *config) {
@@ -157,6 +161,7 @@ static void config_load_persisted(const persisted_config_t *persisted, pico_conf
     config->ntp_server_set = persisted->ntp_server_set != 0;
     copy_string(config->ntp_server, sizeof(config->ntp_server), persisted->ntp_server);
     config->date_display_mode = (pico_date_display_mode_t)persisted->date_display_mode;
+    copy_string(config->hostname, sizeof(config->hostname), persisted->hostname[0] != '\0' ? persisted->hostname : PICO_DEFAULT_HOSTNAME);
 }
 
 static void config_store_persisted(const pico_config_t *config, persisted_config_t *persisted) {
@@ -177,6 +182,7 @@ static void config_store_persisted(const pico_config_t *config, persisted_config
     persisted->ntp_server_set = config->ntp_server_set ? 1u : 0u;
     copy_string(persisted->ntp_server, sizeof(persisted->ntp_server), config->ntp_server);
     persisted->date_display_mode = (uint8_t)config->date_display_mode;
+    copy_string(persisted->hostname, sizeof(persisted->hostname), config->hostname[0] != '\0' ? config->hostname : PICO_DEFAULT_HOSTNAME);
 }
 
 static bool parse_timezone_offset(const char *text, int32_t *offset_seconds) {
@@ -505,6 +511,30 @@ static bool config_apply_ntp_server(pico_config_t *config, const char *value, ch
     return true;
 }
 
+static bool config_apply_hostname(pico_config_t *config, const char *value, char *response, size_t response_size) {
+    if (config == NULL || response == NULL || response_size == 0u) {
+        return false;
+    }
+
+    char work[160];
+    char *token = NULL;
+    memset(work, 0, sizeof(work));
+    if (value != NULL) {
+        strlcpy(work, value, sizeof(work));
+    }
+
+    token = strtok(work, " ");
+    if (token == NULL || *token == '\0') {
+        copy_string(config->hostname, sizeof(config->hostname), PICO_DEFAULT_HOSTNAME);
+        snprintf(response, response_size, "hostname set to %s", config->hostname);
+        return true;
+    }
+
+    copy_string(config->hostname, sizeof(config->hostname), token);
+    snprintf(response, response_size, "hostname set to %s", config->hostname);
+    return true;
+}
+
 bool config_handle_command(pico_config_t *config, const char *line, char *response, size_t response_size) {
     if (config == NULL || line == NULL || response == NULL || response_size == 0) {
         return false;
@@ -540,6 +570,10 @@ bool config_handle_command(pico_config_t *config, const char *line, char *respon
 
     if (strcmp(command_lower, "ntp") == 0) {
         return config_apply_ntp_server(config, value, response, response_size);
+    }
+
+    if (strcmp(command_lower, "hostname") == 0) {
+        return config_apply_hostname(config, value, response, response_size);
     }
 
     if (strcmp(command_lower, "reset") == 0) {

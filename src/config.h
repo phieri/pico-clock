@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define PICO_DEFAULT_HOSTNAME "ntp-clock"
+
 typedef enum {
     PICO_DATE_DISPLAY_OFF = 0,
     PICO_DATE_DISPLAY_ON = 1,
@@ -22,6 +24,7 @@ typedef struct {
     bool ntp_server_set;
     char ntp_server[64];
     pico_date_display_mode_t date_display_mode;
+    char hostname[33];
 } pico_config_t;
 
 void config_init(pico_config_t *config);
