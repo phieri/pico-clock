@@ -563,7 +563,9 @@ bool ntp_sync(clock_state_t *state, const pico_config_t *config) {
     state->boot_epoch_seconds = (uint64_t)((int64_t)best_sample.server_epoch_seconds - elapsed_seconds - (smoothed_drift_ms / 1000LL));
     state->last_sync_ms = now;
     state->drift_ms = smoothed_drift_ms;
+    const bool previously_had_time = state->has_time;
     state->has_time = true;
+    state->sync_interval_ms = previously_had_time ? clock_next_sync_interval_ms(state->sync_interval_ms) : NTP_SYNC_INTERVAL_INITIAL_MS;
 
     printf("ntp synced from %s: %lu (offset=%lldms latency=%lldms)\n",
            servers[0],
