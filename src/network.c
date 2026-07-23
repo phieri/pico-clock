@@ -237,12 +237,28 @@ static uint8_t ntp_packet_mode(const ntp_packet_t *packet) {
     return (uint8_t)(packet->li_vn_mode & 0x7u);
 }
 
+static uint8_t ntp_packet_leap_indicator(const ntp_packet_t *packet) {
+    if (packet == NULL) {
+        return 0u;
+    }
+    return (uint8_t)((packet->li_vn_mode >> 6u) & 0x3u);
+}
+
 static bool ntp_packet_is_kiss_o_death(const ntp_packet_t *packet) {
     return packet != NULL && ntp_packet_mode(packet) == 5u && packet->stratum == 0u;
 }
 
 static bool ntp_packet_is_valid_response(const ntp_packet_t *packet) {
-    return packet != NULL && ntp_packet_version(packet) == 4u && ntp_packet_mode(packet) == 4u;
+    if (packet == NULL) {
+        return false;
+    }
+    if (ntp_packet_version(packet) != 4u || ntp_packet_mode(packet) != 4u) {
+        return false;
+    }
+    if (ntp_packet_leap_indicator(packet) == 3u) {
+        return false;
+    }
+    return packet->stratum != 0u;
 }
 
 static void ntp_format_reference_id(const ntp_packet_t *packet, char *buffer, size_t size) {
@@ -372,16 +388,25 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
     }
 
     if (!ntp_packet_is_valid_response(ntp)) {
-        printf("ntp server %s returned invalid response (mode=%u version=%u)\n",
+        printf("ntp server %s returned invalid response (mode=%u version=%u leap=%u stratum=%u)\n",
                server,
                (unsigned)ntp_packet_mode(ntp),
-               (unsigned)ntp_packet_version(ntp));
+               (unsigned)ntp_packet_version(ntp),
+               (unsigned)ntp_packet_leap_indicator(ntp),
+               (unsigned)ntp->stratum);
+        return false;
+    }
+
+    uint32_t response_orig_seconds = ntohl(ntp->orig_tm_s);
+    uint32_t response_orig_fraction = ntohl(ntp->orig_tm_f);
+    if (response_orig_seconds != client_tx_seconds || response_orig_fraction != client_tx_fraction) {
+        printf("ntp server %s returned mismatched originate timestamp\n", server);
         return false;
     }
 
     uint64_t server_tx_epoch_ms = ntp_timestamp_to_epoch_ms(ntohl(ntp->tx_tm_s), ntohl(ntp->tx_tm_f));
     uint64_t server_rx_epoch_ms = ntp_timestamp_to_epoch_ms(ntohl(ntp->rx_tm_s), ntohl(ntp->rx_tm_f));
-    uint64_t response_orig_epoch_ms = ntp_timestamp_to_epoch_ms(ntohl(ntp->orig_tm_s), ntohl(ntp->orig_tm_f));
+    uint64_t response_orig_epoch_ms = ntp_timestamp_to_epoch_ms(response_orig_seconds, response_orig_fraction);
 
     if (state != NULL && state->has_time) {
         uint64_t local_recv_epoch_ms = (uint64_t)clock_current_epoch_seconds(state, receive_ms) * 1000ULL;
