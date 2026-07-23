@@ -427,13 +427,15 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
     uint64_t server_rx_epoch_ms = ntp_timestamp_to_epoch_ms(ntohl(ntp->rx_tm_s), ntohl(ntp->rx_tm_f));
     uint64_t response_orig_epoch_ms = ntp_timestamp_to_epoch_ms(response_orig_seconds, response_orig_fraction);
 
+    int64_t round_trip_ms = (int64_t)(receive_ms - send_ms);
+    int64_t server_processing_ms = (int64_t)server_tx_epoch_ms - (int64_t)server_rx_epoch_ms;
+    sample->latency_ms = (round_trip_ms - server_processing_ms) / 2LL;
+
     if (state != NULL && state->has_time) {
         uint64_t local_recv_epoch_ms = (uint64_t)clock_current_epoch_seconds(state, receive_ms) * 1000ULL;
         sample->offset_ms = ((int64_t)server_rx_epoch_ms - (int64_t)response_orig_epoch_ms + (int64_t)server_tx_epoch_ms - (int64_t)local_recv_epoch_ms) / 2LL;
-        sample->latency_ms = (int64_t)(receive_ms - send_ms) - ((int64_t)server_tx_epoch_ms - (int64_t)server_rx_epoch_ms);
     } else {
         sample->offset_ms = 0;
-        sample->latency_ms = (int64_t)(receive_ms - send_ms);
     }
 
     sample->server_epoch_seconds = server_tx_epoch_ms / 1000ULL;
