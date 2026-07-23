@@ -8,7 +8,6 @@
 
 #include "network.h"
 
-#define NTP_SYNC_INTERVAL_MS (30u * 60u * 1000u)
 #define CLOCK_REFRESH_INTERVAL_MS 1000u
 
 static runtime_state_t *s_runtime_state = NULL;
@@ -78,7 +77,7 @@ static bool runtime_should_sync_time(const runtime_state_t *state, uint32_t now)
     }
 
     clock_state_t clock_copy = runtime_read_clock(state);
-    return !clock_copy.has_time || (now - clock_copy.last_sync_ms) > NTP_SYNC_INTERVAL_MS;
+    return !clock_copy.has_time || (now - clock_copy.last_sync_ms) >= clock_copy.sync_interval_ms;
 }
 
 static bool runtime_update_startup_config_window(runtime_state_t *state, uint32_t now) {

@@ -12,10 +12,23 @@ static int64_t clock_adjusted_epoch_seconds(uint64_t epoch_seconds, int32_t time
 
 void clock_init(clock_state_t *state) {
     memset(state, 0, sizeof(*state));
+    state->sync_interval_ms = NTP_SYNC_INTERVAL_INITIAL_MS;
 }
 
 uint32_t clock_now_ms(void) {
     return (uint32_t)to_ms_since_boot(get_absolute_time());
+}
+
+uint32_t clock_next_sync_interval_ms(uint32_t current_interval_ms) {
+    if (current_interval_ms == 0u) {
+        return NTP_SYNC_INTERVAL_INITIAL_MS;
+    }
+
+    if (current_interval_ms >= NTP_SYNC_INTERVAL_MAX_MS / 2u) {
+        return NTP_SYNC_INTERVAL_MAX_MS;
+    }
+
+    return current_interval_ms * 2u;
 }
 
 uint64_t clock_current_epoch_seconds(const clock_state_t *state, uint32_t now) {
