@@ -58,13 +58,14 @@ cpr_response_t cpr_get(const char *url) {
         return response;
     }
 
-    response.text = (char *)malloc(strlen(body) + 1);
+    const size_t body_length = strlen(body);
+    response.text = (char *)malloc(body_length + 1u);
     if (!response.text) {
         return response;
     }
 
-    strcpy(response.text, body);
-    response.text_length = strlen(body);
+    memcpy(response.text, body, body_length + 1u);
+    response.text_length = body_length;
     response.status_code = probe_status_code_for_url(url);
     return response;
 }

@@ -175,19 +175,38 @@ static void trim_whitespace(char *text) {
     }
 }
 
+static void safe_string_copy(char *dst, size_t dst_size, const char *src) {
+    if (dst == NULL || dst_size == 0u) {
+        return;
+    }
+
+    if (src == NULL) {
+        dst[0] = '\0';
+        return;
+    }
+
+    size_t src_length = strlen(src);
+    if (src_length >= dst_size) {
+        src_length = dst_size - 1u;
+    }
+
+    memcpy(dst, src, src_length);
+    dst[src_length] = '\0';
+}
+
 static size_t collect_server_names(const pico_config_t *config, char servers[NTP_MAX_SERVERS][64]) {
     size_t count = 0;
     const char *source = (config != NULL && config->ntp_server_set && config->ntp_server[0] != '\0') ? config->ntp_server : NTP_SERVER_FALLBACK_IPV6;
     char work[128];
     memset(work, 0, sizeof(work));
-    strncpy(work, source, sizeof(work) - 1u);
+    safe_string_copy(work, sizeof(work), source);
 
     char *token = strtok(work, ",");
     while (token != NULL && count < NTP_MAX_SERVERS) {
         trim_whitespace(token);
         if (token[0] != '\0') {
             memset(servers[count], 0, sizeof(servers[count]));
-            strncpy(servers[count], token, sizeof(servers[count]) - 1u);
+            safe_string_copy(servers[count], sizeof(servers[count]), token);
             ++count;
         }
         token = strtok(NULL, ",");
@@ -195,9 +214,9 @@ static size_t collect_server_names(const pico_config_t *config, char servers[NTP
 
     if (count == 0) {
         memset(servers[0], 0, sizeof(servers[0]));
-        strncpy(servers[0], NTP_SERVER_FALLBACK_IPV6, sizeof(servers[0]) - 1u);
+        safe_string_copy(servers[0], sizeof(servers[0]), NTP_SERVER_FALLBACK_IPV6);
         memset(servers[1], 0, sizeof(servers[1]));
-        strncpy(servers[1], NTP_SERVER_FALLBACK_IPV4, sizeof(servers[1]) - 1u);
+        safe_string_copy(servers[1], sizeof(servers[1]), NTP_SERVER_FALLBACK_IPV4);
         count = 2u;
     }
 
