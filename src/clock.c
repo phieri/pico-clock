@@ -24,16 +24,11 @@ uint32_t clock_next_sync_interval_ms(uint32_t current_interval_ms) {
         return NTP_SYNC_INTERVAL_INITIAL_MS;
     }
 
-    if (current_interval_ms >= NTP_SYNC_INTERVAL_MAX_MS) {
+    if (current_interval_ms >= NTP_SYNC_INTERVAL_MAX_MS / 2u) {
         return NTP_SYNC_INTERVAL_MAX_MS;
     }
 
-    uint32_t next_interval_ms = current_interval_ms * 2u;
-    if (next_interval_ms < current_interval_ms || next_interval_ms > NTP_SYNC_INTERVAL_MAX_MS) {
-        return NTP_SYNC_INTERVAL_MAX_MS;
-    }
-
-    return next_interval_ms;
+    return current_interval_ms * 2u;
 }
 
 uint64_t clock_current_epoch_seconds(const clock_state_t *state, uint32_t now) {

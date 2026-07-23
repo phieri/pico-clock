@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 #define NTP_SYNC_INTERVAL_INITIAL_MS (30u * 60u * 1000u)
-#define NTP_SYNC_INTERVAL_MAX_MS (24u * 60u * 60u * 1000u)
+#define NTP_SYNC_INTERVAL_MAX_MS UINT32_MAX
 
 typedef struct {
     bool has_time;
