@@ -411,6 +411,10 @@ static bool config_parse_command(const char *line, char *command, size_t command
 }
 
 static bool config_handle_wifi_command(pico_config_t *config, const char *value, char *response, size_t response_size) {
+    if (config == NULL || response == NULL || response_size == 0u) {
+        return false;
+    }
+
     char ssid[33];
     char password[64];
     char *ssid_ptr = NULL;
@@ -420,6 +424,11 @@ static bool config_handle_wifi_command(pico_config_t *config, const char *value,
     memset(password, 0, sizeof(password));
 
     char work[160];
+    if (value == NULL) {
+        snprintf(response, response_size, "wifi unset");
+        config->wifi_configured = false;
+        return true;
+    }
     strlcpy(work, value, sizeof(work));
     ssid_ptr = strtok(work, " ");
     if (ssid_ptr == NULL || *ssid_ptr == '\0') {
@@ -442,7 +451,7 @@ static bool config_handle_wifi_command(pico_config_t *config, const char *value,
 }
 
 static bool config_apply_timezone(pico_config_t *config, const char *value, char *response, size_t response_size) {
-    if (value[0] == '\0') {
+    if (value == NULL || value[0] == '\0') {
         snprintf(response, response_size, "timezone unset");
         config->timezone_set = false;
         return true;
@@ -459,7 +468,7 @@ static bool config_apply_timezone(pico_config_t *config, const char *value, char
 }
 
 static bool config_apply_colour(pico_config_t *config, const char *value, char *response, size_t response_size) {
-    if (value[0] == '\0') {
+    if (value == NULL || value[0] == '\0') {
         snprintf(response, response_size, "color unset");
         config->clock_colour_set = false;
         return true;
@@ -476,7 +485,7 @@ static bool config_apply_colour(pico_config_t *config, const char *value, char *
 }
 
 static bool config_apply_date_mode(pico_config_t *config, const char *value, char *response, size_t response_size) {
-    if (value[0] == '\0') {
+    if (value == NULL || value[0] == '\0') {
         config->date_display_mode = PICO_DATE_DISPLAY_OFF;
         snprintf(response, response_size, "date display set to off");
         return true;
@@ -500,7 +509,7 @@ static bool config_apply_date_mode(pico_config_t *config, const char *value, cha
 }
 
 static bool config_apply_ntp_server(pico_config_t *config, const char *value, char *response, size_t response_size) {
-    if (value[0] == '\0') {
+    if (value == NULL || value[0] == '\0') {
         snprintf(response, response_size, "ntp unset");
         config->ntp_server_set = false;
         return true;
