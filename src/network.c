@@ -242,6 +242,13 @@ static uint64_t ntp_timestamp_to_epoch_ms(uint32_t seconds, uint32_t fraction) {
     return (epoch_seconds * 1000ULL) + fractional_ms;
 }
 
+static uint64_t ntp_client_epoch_ms(const clock_state_t *state, uint32_t now_ms) {
+    if (state != NULL && state->has_time) {
+        return (uint64_t)clock_current_epoch_seconds(state, now_ms) * 1000ULL;
+    }
+    return (uint64_t)now_ms;
+}
+
 static uint8_t ntp_packet_version(const ntp_packet_t *packet) {
     if (packet == NULL) {
         return 0u;
@@ -427,13 +434,14 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
     uint64_t server_rx_epoch_ms = ntp_timestamp_to_epoch_ms(ntohl(ntp->rx_tm_s), ntohl(ntp->rx_tm_f));
     uint64_t response_orig_epoch_ms = ntp_timestamp_to_epoch_ms(response_orig_seconds, response_orig_fraction);
 
-    int64_t round_trip_ms = (int64_t)(receive_ms - send_ms);
+    uint64_t client_tx_epoch_ms = ntp_client_epoch_ms(state, send_ms);
+    uint64_t client_rx_epoch_ms = ntp_client_epoch_ms(state, receive_ms);
+    int64_t round_trip_ms = (int64_t)(client_rx_epoch_ms - client_tx_epoch_ms);
     int64_t server_processing_ms = (int64_t)server_tx_epoch_ms - (int64_t)server_rx_epoch_ms;
     sample->latency_ms = (round_trip_ms - server_processing_ms) / 2LL;
 
     if (state != NULL && state->has_time) {
-        uint64_t local_recv_epoch_ms = (uint64_t)clock_current_epoch_seconds(state, receive_ms) * 1000ULL;
-        sample->offset_ms = ((int64_t)server_rx_epoch_ms - (int64_t)response_orig_epoch_ms + (int64_t)server_tx_epoch_ms - (int64_t)local_recv_epoch_ms) / 2LL;
+        sample->offset_ms = ((int64_t)server_rx_epoch_ms - (int64_t)response_orig_epoch_ms + (int64_t)server_tx_epoch_ms - (int64_t)client_rx_epoch_ms) / 2LL;
     } else {
         sample->offset_ms = 0;
     }
