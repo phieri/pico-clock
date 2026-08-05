@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define PICO_DEFAULT_HOSTNAME "ntp-clock"
+#define PICO_DEFAULT_HOSTNAME "pico-clock"
 
 typedef enum {
     PICO_DATE_DISPLAY_OFF = 0,
