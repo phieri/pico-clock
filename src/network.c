@@ -179,19 +179,17 @@ static void safe_string_copy(char *dst, size_t dst_size, const char *src) {
     if (dst == NULL || dst_size == 0u) {
         return;
     }
-
     if (src == NULL) {
         dst[0] = '\0';
         return;
     }
 
-    size_t src_length = strlen(src);
-    if (src_length >= dst_size) {
-        src_length = dst_size - 1u;
+    size_t length = 0u;
+    while (length + 1u < dst_size && src[length] != '\0') {
+        dst[length] = src[length];
+        ++length;
     }
-
-    memcpy(dst, src, src_length);
-    dst[src_length] = '\0';
+    dst[length] = '\0';
 }
 
 static size_t collect_server_names(const pico_config_t *config, char servers[NTP_MAX_SERVERS][64]) {
