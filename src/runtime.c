@@ -12,6 +12,10 @@
 
 static runtime_state_t *s_runtime_state = NULL;
 
+static runtime_state_t *runtime_state_for_lock(const runtime_state_t *state) {
+    return (runtime_state_t *)state;
+}
+
 static uint32_t runtime_lock_state(runtime_state_t *state) {
     if (state == NULL) {
         return 0u;
@@ -43,9 +47,10 @@ static clock_state_t runtime_read_clock(const runtime_state_t *state) {
         return clock_copy;
     }
 
-    uint32_t irq_state = runtime_lock_state((runtime_state_t *)state);
+    runtime_state_t *mutable_state = runtime_state_for_lock(state);
+    uint32_t irq_state = runtime_lock_state(mutable_state);
     clock_copy = state->clock;
-    runtime_unlock_state((runtime_state_t *)state, irq_state);
+    runtime_unlock_state(mutable_state, irq_state);
     return clock_copy;
 }
 
@@ -55,9 +60,10 @@ static pico_config_t runtime_read_config(const runtime_state_t *state) {
         return config_copy;
     }
 
-    uint32_t irq_state = runtime_lock_state((runtime_state_t *)state);
+    runtime_state_t *mutable_state = runtime_state_for_lock(state);
+    uint32_t irq_state = runtime_lock_state(mutable_state);
     config_copy = state->config;
-    runtime_unlock_state((runtime_state_t *)state, irq_state);
+    runtime_unlock_state(mutable_state, irq_state);
     return config_copy;
 }
 

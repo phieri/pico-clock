@@ -89,27 +89,38 @@ static int flash_sync(const struct lfs_config *c) {
 }
 
 static void lowercase_copy(char *dst, size_t size, const char *src) {
-    size_t i;
-    for (i = 0; i < size - 1 && src[i] != '\0'; ++i) {
-        dst[i] = (char)((src[i] >= 'A' && src[i] <= 'Z') ? (src[i] - 'A' + 'a') : src[i]);
-    }
-    dst[i] = '\0';
-}
-
-static void copy_string(char *dst, size_t dst_size, const char *src) {
-    if (dst == NULL || dst_size == 0) {
+    if (dst == NULL || size == 0u) {
         return;
     }
     if (src == NULL) {
         dst[0] = '\0';
         return;
     }
-    size_t len = strlen(src);
-    if (len >= dst_size) {
-        len = dst_size - 1;
+
+    size_t index = 0u;
+    while (index + 1u < size && src[index] != '\0') {
+        unsigned char ch = (unsigned char)src[index];
+        dst[index] = (char)((ch >= 'A' && ch <= 'Z') ? (ch - 'A' + 'a') : ch);
+        ++index;
     }
-    memcpy(dst, src, len);
-    dst[len] = '\0';
+    dst[index] = '\0';
+}
+
+static void copy_string(char *dst, size_t dst_size, const char *src) {
+    if (dst == NULL || dst_size == 0u) {
+        return;
+    }
+    if (src == NULL) {
+        dst[0] = '\0';
+        return;
+    }
+
+    size_t length = 0u;
+    while (length + 1u < dst_size && src[length] != '\0') {
+        dst[length] = src[length];
+        ++length;
+    }
+    dst[length] = '\0';
 }
 
 static void config_apply_defaults(pico_config_t *config) {
