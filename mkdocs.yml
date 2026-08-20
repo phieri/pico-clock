@@ -1,0 +1,38 @@
+site_name: Pico Clock
+site_url: https://phieri.github.io/pico-clock/
+site_description: User guide and setup instructions for the Pico Clock networked display.
+repo_url: https://github.com/phieri/pico-clock
+repo_name: phieri/pico-clock
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: cyan
+      accent: amber
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: cyan
+      accent: amber
+
+nav:
+  - Home: index.md
+  - Quick start: getting-started.md
+  - Configuration: configuration.md
+  - Troubleshooting: troubleshooting.md
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true

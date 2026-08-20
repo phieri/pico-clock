@@ -1,5 +1,7 @@
 # pico-clock
 
+Documentation site: https://phieri.github.io/pico-clock/
+
 A Raspberry Pi Pico 2 W firmware project for a compact network clock. The firmware boots, connects to an open Wi-Fi network, validates connectivity with a captive-portal probe, synchronizes time over NTP, tracks drift and latency, and renders the current time and status on a framebuffer-backed display.
 
 ![Pico Clock display preview](docs/pico-clock-screenshot.png)
