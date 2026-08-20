@@ -1,4 +1,4 @@
-name: Build Raspberry Pi Pico W Firmware
+name: Build pico-clock Firmware
 
 on:
   push:
@@ -17,8 +17,8 @@ env:
   PICO_SDK_VERSION: 2.3.0
 
 jobs:
-  build-bridge:
-    name: Build Bridge Firmware (${{ matrix.board }})
+  build-pico-clock:
+    name: Build pico-clock Firmware (${{ matrix.board }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
