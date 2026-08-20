@@ -557,6 +557,7 @@ bool ntp_sync(clock_state_t *state, const pico_config_t *config) {
     size_t server_count = collect_server_names(config, servers);
 
     ntp_sample_t best_sample;
+    char best_server[64] = {0};
     memset(&best_sample, 0, sizeof(best_sample));
     bool found_sample = false;
 
@@ -572,6 +573,7 @@ bool ntp_sync(clock_state_t *state, const pico_config_t *config) {
 
         if (!found_sample || llabs(sample.latency_ms) < llabs(best_sample.latency_ms)) {
             best_sample = sample;
+            safe_string_copy(best_server, sizeof(best_server), servers[index]);
             found_sample = true;
         }
     }
@@ -595,7 +597,7 @@ bool ntp_sync(clock_state_t *state, const pico_config_t *config) {
     state->sync_interval_ms = previously_had_time ? clock_next_sync_interval_ms(state->sync_interval_ms) : NTP_SYNC_INTERVAL_INITIAL_MS;
 
     printf("ntp synced from %s: %lu (offset=%lldms latency=%lldms)\n",
-           servers[0],
+           best_server,
            (unsigned long)best_sample.server_epoch_seconds,
            (long long)best_sample.offset_ms,
            (long long)best_sample.latency_ms);
