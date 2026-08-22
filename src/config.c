@@ -123,6 +123,20 @@ static void copy_string(char *dst, size_t dst_size, const char *src) {
     dst[length] = '\0';
 }
 
+static void config_apply_default_hostname(pico_config_t *config) {
+    if (config == NULL) {
+        return;
+    }
+    copy_string(config->hostname, sizeof(config->hostname), PICO_DEFAULT_HOSTNAME);
+}
+
+static const char *config_hostname_or_default(const char *hostname) {
+    if (hostname == NULL || hostname[0] == '\0') {
+        return PICO_DEFAULT_HOSTNAME;
+    }
+    return hostname;
+}
+
 static void config_apply_defaults(pico_config_t *config) {
     if (config == NULL) {
         return;
@@ -136,7 +150,7 @@ static void config_apply_defaults(pico_config_t *config) {
     config->date_display_mode = PICO_DATE_DISPLAY_OFF;
     config->hostname[0] = '\0';
     copy_string(config->ntp_server, sizeof(config->ntp_server), "2001:4860:4860::8888,216.239.35.0");
-    copy_string(config->hostname, sizeof(config->hostname), PICO_DEFAULT_HOSTNAME);
+    config_apply_default_hostname(config);
 }
 
 static void config_load_legacy_persisted(const persisted_config_v1_t *persisted, pico_config_t *config) {
@@ -154,7 +168,7 @@ static void config_load_legacy_persisted(const persisted_config_v1_t *persisted,
     config->ntp_server_set = persisted->ntp_server_set != 0;
     copy_string(config->ntp_server, sizeof(config->ntp_server), persisted->ntp_server);
     config->date_display_mode = PICO_DATE_DISPLAY_OFF;
-    copy_string(config->hostname, sizeof(config->hostname), PICO_DEFAULT_HOSTNAME);
+    config_apply_default_hostname(config);
 }
 
 static void config_load_persisted(const persisted_config_t *persisted, pico_config_t *config) {
@@ -172,7 +186,7 @@ static void config_load_persisted(const persisted_config_t *persisted, pico_conf
     config->ntp_server_set = persisted->ntp_server_set != 0;
     copy_string(config->ntp_server, sizeof(config->ntp_server), persisted->ntp_server);
     config->date_display_mode = (pico_date_display_mode_t)persisted->date_display_mode;
-    copy_string(config->hostname, sizeof(config->hostname), persisted->hostname[0] != '\0' ? persisted->hostname : PICO_DEFAULT_HOSTNAME);
+    copy_string(config->hostname, sizeof(config->hostname), config_hostname_or_default(persisted->hostname));
 }
 
 static void config_store_persisted(const pico_config_t *config, persisted_config_t *persisted) {
@@ -193,7 +207,7 @@ static void config_store_persisted(const pico_config_t *config, persisted_config
     persisted->ntp_server_set = config->ntp_server_set ? 1u : 0u;
     copy_string(persisted->ntp_server, sizeof(persisted->ntp_server), config->ntp_server);
     persisted->date_display_mode = (uint8_t)config->date_display_mode;
-    copy_string(persisted->hostname, sizeof(persisted->hostname), config->hostname[0] != '\0' ? config->hostname : PICO_DEFAULT_HOSTNAME);
+    copy_string(persisted->hostname, sizeof(persisted->hostname), config_hostname_or_default(config->hostname));
 }
 
 static bool parse_timezone_offset(const char *text, int32_t *offset_seconds) {
