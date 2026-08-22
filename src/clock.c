@@ -85,12 +85,34 @@ static void days_to_date(int64_t day_count, unsigned *year, unsigned *month, uns
     *day = (unsigned)current_day_count + 1u;
 }
 
+static void clock_normalize_day_seconds(int64_t adjusted_seconds, int64_t *day_count, int64_t *day_seconds) {
+    if (day_count == NULL || day_seconds == NULL) {
+        return;
+    }
+
+    *day_seconds = adjusted_seconds % 86400LL;
+    *day_count = adjusted_seconds / 86400LL;
+    if (*day_seconds < 0) {
+        *day_seconds += 86400LL;
+        --(*day_count);
+    }
+}
+
+static int64_t clock_weekday_index(int64_t day_count) {
+    int64_t weekday_index = (4LL + day_count) % 7LL;
+    if (weekday_index < 0) {
+        weekday_index += 7LL;
+    }
+    return weekday_index;
+}
+
 void clock_format_hms(uint64_t epoch_seconds, int32_t timezone_offset_seconds, char *buffer, size_t size) {
     int64_t adjusted_seconds = clock_adjusted_epoch_seconds(epoch_seconds, timezone_offset_seconds);
-    int64_t day_seconds = adjusted_seconds % 86400LL;
-    if (day_seconds < 0) {
-        day_seconds += 86400LL;
-    }
+    int64_t day_count = 0LL;
+    int64_t day_seconds = 0LL;
+    clock_normalize_day_seconds(adjusted_seconds, &day_count, &day_seconds);
+    (void)day_count;
+
     uint32_t seconds = (uint32_t)day_seconds;
     uint32_t hours = seconds / 3600u;
     uint32_t minutes = (seconds % 3600u) / 60u;
@@ -100,12 +122,10 @@ void clock_format_hms(uint64_t epoch_seconds, int32_t timezone_offset_seconds, c
 
 void clock_format_date(uint64_t epoch_seconds, int32_t timezone_offset_seconds, char *buffer, size_t size) {
     int64_t adjusted_seconds = clock_adjusted_epoch_seconds(epoch_seconds, timezone_offset_seconds);
-    int64_t day_seconds = adjusted_seconds % 86400LL;
-    int64_t day_count = adjusted_seconds / 86400LL;
-    if (day_seconds < 0) {
-        day_seconds += 86400LL;
-        --day_count;
-    }
+    int64_t day_count = 0LL;
+    int64_t day_seconds = 0LL;
+    clock_normalize_day_seconds(adjusted_seconds, &day_count, &day_seconds);
+    (void)day_seconds;
 
     unsigned year = 0u;
     unsigned month = 0u;
@@ -113,10 +133,7 @@ void clock_format_date(uint64_t epoch_seconds, int32_t timezone_offset_seconds, 
     days_to_date(day_count, &year, &month, &day);
 
     static const char *const weekday_names[7u] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
-    int64_t weekday_index = (4LL + day_count) % 7LL;
-    if (weekday_index < 0) {
-        weekday_index += 7LL;
-    }
+    int64_t weekday_index = clock_weekday_index(day_count);
 
     snprintf(buffer, size, "%04u-%02u-%02u %s", year, month, day, weekday_names[(size_t)weekday_index]);
 }
@@ -130,10 +147,10 @@ bool clock_should_show_date(uint64_t epoch_seconds, int32_t timezone_offset_seco
     }
 
     int64_t adjusted_seconds = clock_adjusted_epoch_seconds(epoch_seconds, timezone_offset_seconds);
-    int64_t day_seconds = adjusted_seconds % 86400LL;
-    if (day_seconds < 0) {
-        day_seconds += 86400LL;
-    }
+    int64_t day_count = 0LL;
+    int64_t day_seconds = 0LL;
+    clock_normalize_day_seconds(adjusted_seconds, &day_count, &day_seconds);
+    (void)day_count;
 
     return (day_seconds >= (23u * 3600u)) || (day_seconds <= (1u * 3600u));
 }
