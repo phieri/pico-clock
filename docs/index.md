@@ -2,7 +2,7 @@
 
 A compact Raspberry Pi Pico W / Pico 2 W network clock with a bright display, automatic Wi‑Fi setup, and resilient time sync.
 
-![Pico Clock illustration](assets/pico-clock-illustration.svg)
+![Pico Clock display preview](pico-clock-screenshot.png)
 
 <p class="md-typeset__lead">Built for a clean desk, a quiet wall, and a reliable time source that keeps itself online.</p>
 
