@@ -129,7 +129,7 @@ static void display_prepare_layout(const char *time_buffer, const char *date_buf
     const int text_width = (int)((longest_length * 6u - 1u) * (unsigned)layout->scale);
     const int text_height = 7 * layout->scale;
     layout->width = text_width;
-    layout->height = (show_date ? (text_height * 2u + 20u) : text_height);
+    layout->height = show_date ? text_height * 2 + 20 : text_height;
     layout->x = (DISPLAY_WIDTH - (unsigned)text_width) / 2u;
     layout->y = (DISPLAY_HEIGHT - (unsigned)layout->height) / 2u;
 }
@@ -141,7 +141,7 @@ void display_init(display_framebuffer_t *framebuffer) {
 }
 
 void display_clear(display_framebuffer_t *framebuffer, uint8_t value) {
-    memset(framebuffer->pixels, value, sizeof(framebuffer->pixels));
+    memset(framebuffer->pixels, value == 0u ? 0x00u : 0xffu, sizeof(framebuffer->pixels));
 }
 
 void display_draw_pixel(display_framebuffer_t *framebuffer, int x, int y, uint8_t value) {
@@ -149,7 +149,13 @@ void display_draw_pixel(display_framebuffer_t *framebuffer, int x, int y, uint8_
         return;
     }
 
-    framebuffer->pixels[(size_t)y * framebuffer->width + (size_t)x] = value;
+    size_t pixel_index = (size_t)y * framebuffer->width + (size_t)x;
+    uint8_t mask = (uint8_t)(0x80u >> (pixel_index % 8u));
+    if (value != 0u) {
+        framebuffer->pixels[pixel_index / 8u] |= mask;
+    } else {
+        framebuffer->pixels[pixel_index / 8u] &= (uint8_t)~mask;
+    }
 }
 
 void display_draw_rect(display_framebuffer_t *framebuffer, int x, int y, int width, int height, uint8_t value) {

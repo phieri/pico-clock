@@ -2,7 +2,7 @@
 
 Documentation site: https://phieri.github.io/pico-clock/
 
-A Raspberry Pi Pico 2 W firmware project for a compact network clock. The firmware boots, connects to an open Wi-Fi network, validates connectivity with a captive-portal probe, synchronizes time over NTP, tracks drift and latency, and renders the current time and status on a framebuffer-backed display.
+A Raspberry Pi Pico W / Pico 2 W firmware project for a network clock. The firmware connects to Wi-Fi, validates connectivity with a captive-portal probe on open networks, synchronizes time over NTP, and renders the time in memory. It also reports the time over USB serial once per second.
 
 ![Pico Clock display preview](docs/pico-clock-screenshot.png)
 
@@ -10,9 +10,9 @@ A Raspberry Pi Pico 2 W firmware project for a compact network clock. The firmwa
 - Builds with CMake and the Raspberry Pi Pico SDK.
 - Targets the Pico W / Pico 2 W family via the Pico SDK's `pico_cyw43_arch` networking stack.
 - Connects to open Wi-Fi networks and skips captive-portal probing for password-protected networks. When probing an open network, it tries a small set of common captive-portal endpoints to bypass portal-style redirects.
-- Prefers IPv6 NTP resolution with IPv4 fallback and retries against multiple servers.
-- Tracks boot-time drift and subsequent time corrections.
-- Renders the current time and drift information in a framebuffer display loop.
+- Tries the configured NTP server addresses (IPv6 then IPv4 by default).
+- Tracks synchronization offsets and latency.
+- Renders the current time (and optionally the date) in a 1024×600 monochrome, packed framebuffer.
 - Moves Wi-Fi connection and NTP synchronization work onto the Pico's second core so the main loop stays focused on display updates and serial handling.
 
 ## Project layout
@@ -41,4 +41,6 @@ Build outputs are written under `build/` as `.uf2`, `.elf`, `.bin`, and `.hex` a
 - Wi-Fi credentials are configured over the serial console after flashing. Use the `wifi <ssid> [<password>]` command to store credentials persistently; no compile-time Wi-Fi defaults are supported.
 - The device hostname is also configured over the serial console with the `hostname <name>` command. If no value is provided, it resets to the default `pico-clock` name.
 - Date display behaviour is also configured over the serial console with the `date on|auto|off` command (or `showdate ...` as an alias). `on` shows the date below the time at all times, `auto` only shows it around midnight, and `off` keeps the existing time-only display.
+- Serial commands are accepted during the first 30 seconds after boot; entering a character extends the window. Wi-Fi and NTP start when the window closes. Connect a USB serial terminal promptly to configure the device.
+- **Physical display output is not yet implemented.** The framebuffer is never sent to a panel: a display controller, interface, wiring/pin map, and driver are needed before this can run as a standalone screen clock. Until then, the USB serial clock output is usable without a panel. The `color` setting affects only whether monochrome pixels are on (nonzero) or off.
 - The project expects the Pico SDK under `.deps/pico-sdk` and the littlefs sources under `.deps/littlefs`; `./scripts/bootstrap-pico.sh` helps prepare those paths. If configure later complains about missing `lfs.c`, clone littlefs into `.deps/littlefs` before retrying.

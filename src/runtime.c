@@ -188,6 +188,7 @@ static void refresh_clock_display(runtime_state_t *state) {
     }
     display_draw_time(&state->display, time_buffer, show_date ? date_buffer : NULL, show_date,
                       config_copy.clock_colour_set ? config_copy.clock_colour : 0xFFu);
+    printf("%s%s%s\n", time_buffer, show_date ? " " : "", show_date ? date_buffer : "");
 }
 
 static void runtime_render_view(runtime_state_t *state) {
@@ -234,7 +235,7 @@ static bool runtime_sync_time_if_due(runtime_state_t *state) {
     }
 
     uint32_t now = clock_now_ms();
-    if (!runtime_update_startup_config_window(state, now) || !runtime_should_sync_time(state, now)) {
+    if (runtime_update_startup_config_window(state, now) || !runtime_should_sync_time(state, now)) {
         return false;
     }
 
@@ -292,9 +293,6 @@ void runtime_state_init(runtime_state_t *state) {
         printf("config load failed; using defaults\n");
     }
 
-    s_runtime_state = state;
-    multicore_reset_core1();
-    multicore_launch_core1(core1_network_worker);
 }
 
 void runtime_run(runtime_state_t *state) {
@@ -302,9 +300,16 @@ void runtime_run(runtime_state_t *state) {
         return;
     }
 
+    bool network_started = false;
     while (true) {
         runtime_handle_serial_input(state);
+        if (!network_started && !runtime_update_startup_config_window(state, clock_now_ms())) {
+            s_runtime_state = state;
+            multicore_reset_core1();
+            multicore_launch_core1(core1_network_worker);
+            network_started = true;
+        }
         runtime_render_view(state);
-        sleep_ms(CLOCK_REFRESH_INTERVAL_MS);
+        sleep_ms(network_started ? CLOCK_REFRESH_INTERVAL_MS : 10u);
     }
 }

@@ -45,7 +45,7 @@ The generated build outputs are written to `build/` as `.uf2`, `.elf`, `.bin`, a
 1. Put the Pico into USB bootloader mode.
 2. Copy the generated `.uf2` image to the mounted drive.
 3. Open the serial console at the configured baud rate.
-4. Configure the Wi‑Fi network and hostname as needed.
+4. Connect a USB serial terminal within 30 seconds of boot to configure Wi‑Fi and the hostname. The time is printed to USB serial once per second after synchronization. No physical display driver is included yet; the in-memory framebuffer requires a panel-specific driver and wiring.
 
 ## 5. Configure the device over serial
 

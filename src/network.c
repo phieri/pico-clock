@@ -47,7 +47,7 @@ typedef struct __attribute__((packed)) {
 } ntp_packet_t;
 
 typedef struct {
-    bool received;
+    volatile bool received;
     uint8_t payload[48];
     uint16_t length;
 } ntp_receive_state_t;
@@ -56,7 +56,8 @@ typedef struct {
     bool valid;
     int64_t offset_ms;
     int64_t latency_ms;
-    uint64_t server_epoch_seconds;
+    uint64_t server_epoch_ms;
+    uint32_t receive_ms;
 } ntp_sample_t;
 
 typedef struct {
@@ -112,7 +113,7 @@ static int wifi_scan_result_cb(void *env, const cyw43_ev_scan_result_t *result) 
     return 0;
 }
 
-static bool response_body_indicates_success(const cpr_response_t *response) {
+static bool response_body_indicates_success(const cpr_response_t *response, size_t endpoint_index) {
     if (response == NULL || response->text == NULL || response->text_length == 0u) {
         return false;
     }
@@ -128,7 +129,13 @@ static bool response_body_indicates_success(const cpr_response_t *response) {
     }
     normalized[normalized_length] = '\0';
 
-    return strstr(normalized, "ok") != NULL || strstr(normalized, "success") != NULL || strstr(normalized, "generate_204") != NULL;
+    if (endpoint_index == 0u) {
+        return strcmp(normalized, "ok") == 0 || strcmp(normalized, "ok\n") == 0;
+    }
+    if (endpoint_index == 1u) {
+        return strcmp(normalized, "success") == 0 || strcmp(normalized, "success\n") == 0;
+    }
+    return endpoint_index == 2u && strstr(normalized, "<title>success</title>") != NULL;
 }
 
 static bool captive_portal_check(void) {
@@ -141,7 +148,8 @@ static bool captive_portal_check(void) {
 
     for (size_t index = 0; index < (sizeof(probe_urls) / sizeof(probe_urls[0])); ++index) {
         cpr_response_t response = cpr_get(probe_urls[index]);
-        bool success = (response.status_code == 204u) || (cpr_is_successful(&response) && response_body_indicates_success(&response));
+        bool success = (index == 3u && response.status_code == 204u) ||
+                       (index != 3u && cpr_is_successful(&response) && response_body_indicates_success(&response, index));
         if (success) {
             printf("captive portal probe succeeded with HTTP %ld via %s\n", response.status_code, probe_urls[index]);
             cpr_response_free(&response);
@@ -333,22 +341,31 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
     }
 
     ntp_receive_state_t receive_state = {0};
+    cyw43_arch_lwip_begin();
     struct udp_pcb *pcb = udp_new_ip_type(IP_IS_V6(&server_addr) ? IPADDR_TYPE_V6 : IPADDR_TYPE_V4);
+    cyw43_arch_lwip_end();
     if (!pcb) {
         printf("udp pcb create failed for %s\n", server);
         return false;
     }
 
-    if (udp_bind(pcb, IP_ADDR_ANY, 0) != ERR_OK) {
-        printf("udp bind failed for %s\n", server);
+    cyw43_arch_lwip_begin();
+    err_t connect_err = udp_connect(pcb, &server_addr, NTP_SERVER_PORT);
+    cyw43_arch_lwip_end();
+    if (connect_err != ERR_OK) {
+        printf("udp connect failed for %s\n", server);
+        cyw43_arch_lwip_begin();
         udp_remove(pcb);
+        cyw43_arch_lwip_end();
         return false;
     }
 
+    cyw43_arch_lwip_begin();
     udp_recv(pcb, ntp_udp_recv, &receive_state);
+    cyw43_arch_lwip_end();
 
     uint8_t packet[48] = {0};
-    packet[0] = 0x1b;
+    packet[0] = 0x23;
 
     uint32_t send_ms = clock_now_ms();
     uint64_t local_tx_epoch_ms = 0;
@@ -358,40 +375,50 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
         local_tx_epoch_ms = (uint64_t)clock_current_epoch_seconds(state, send_ms) * 1000ULL;
     }
     ntp_epoch_ms_to_timestamp(local_tx_epoch_ms, &client_tx_seconds, &client_tx_fraction);
-    ((uint32_t *)packet)[10] = htonl(client_tx_seconds);
-    ((uint32_t *)packet)[11] = htonl(client_tx_fraction);
+    uint32_t tx_seconds_network = htonl(client_tx_seconds);
+    uint32_t tx_fraction_network = htonl(client_tx_fraction);
+    memcpy(packet + 40u, &tx_seconds_network, sizeof(tx_seconds_network));
+    memcpy(packet + 44u, &tx_fraction_network, sizeof(tx_fraction_network));
 
     struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, sizeof(packet), PBUF_RAM);
     if (!p) {
         printf("pbuf alloc failed for %s\n", server);
+        cyw43_arch_lwip_begin();
         udp_remove(pcb);
+        cyw43_arch_lwip_end();
         return false;
     }
 
     if (pbuf_take(p, packet, sizeof(packet)) != ERR_OK) {
         printf("pbuf take failed for %s\n", server);
         pbuf_free(p);
+        cyw43_arch_lwip_begin();
         udp_remove(pcb);
+        cyw43_arch_lwip_end();
         return false;
     }
 
     cyw43_arch_lwip_begin();
-    err_t err = udp_sendto(pcb, p, &server_addr, NTP_SERVER_PORT);
+    err_t err = udp_send(pcb, p);
     cyw43_arch_lwip_end();
     if (err != ERR_OK) {
         printf("ntp send failed for %s\n", server);
         pbuf_free(p);
+        cyw43_arch_lwip_begin();
         udp_remove(pcb);
+        cyw43_arch_lwip_end();
         return false;
     }
+    pbuf_free(p);
 
-    uint32_t deadline = send_ms + NTP_TIMEOUT_MS;
-    while (!receive_state.received && (clock_now_ms() < deadline)) {
+    while (!receive_state.received && (uint32_t)(clock_now_ms() - send_ms) < NTP_TIMEOUT_MS) {
         sleep_ms(10);
     }
 
     uint32_t receive_ms = clock_now_ms();
+    cyw43_arch_lwip_begin();
     udp_remove(pcb);
+    cyw43_arch_lwip_end();
 
     if (!receive_state.received) {
         printf("ntp receive failed for %s\n", server);
@@ -427,6 +454,10 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
         printf("ntp server %s returned mismatched originate timestamp\n", server);
         return false;
     }
+    if (ntohl(ntp->tx_tm_s) < 2208988800u || ntohl(ntp->rx_tm_s) < 2208988800u) {
+        printf("ntp server %s returned a timestamp before the Unix epoch\n", server);
+        return false;
+    }
 
     uint64_t server_tx_epoch_ms = ntp_timestamp_to_epoch_ms(ntohl(ntp->tx_tm_s), ntohl(ntp->tx_tm_f));
     uint64_t server_rx_epoch_ms = ntp_timestamp_to_epoch_ms(ntohl(ntp->rx_tm_s), ntohl(ntp->rx_tm_f));
@@ -444,7 +475,8 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
         sample->offset_ms = 0;
     }
 
-    sample->server_epoch_seconds = server_tx_epoch_ms / 1000ULL;
+    sample->server_epoch_ms = server_tx_epoch_ms;
+    sample->receive_ms = receive_ms;
     sample->valid = true;
     return true;
 }
@@ -584,12 +616,11 @@ bool ntp_sync(clock_state_t *state, const pico_config_t *config) {
     }
 
     uint32_t now = clock_now_ms();
-    uint32_t previous_boot_ms = state->boot_ms;
-    int64_t elapsed_seconds = (int64_t)((now - previous_boot_ms) / 1000u);
     int32_t smoothed_drift_ms = (int32_t)((((int64_t)state->drift_ms * 3LL) + best_sample.offset_ms) / 4LL);
 
     state->boot_ms = now;
-    state->boot_epoch_seconds = (uint64_t)((int64_t)best_sample.server_epoch_seconds - elapsed_seconds - (smoothed_drift_ms / 1000LL));
+    state->boot_epoch_seconds = (best_sample.server_epoch_ms + (now - best_sample.receive_ms) +
+                                 (best_sample.latency_ms > 0 ? (uint64_t)best_sample.latency_ms : 0u)) / 1000ULL;
     state->last_sync_ms = now;
     state->drift_ms = smoothed_drift_ms;
     const bool previously_had_time = state->has_time;
@@ -598,7 +629,7 @@ bool ntp_sync(clock_state_t *state, const pico_config_t *config) {
 
     printf("ntp synced from %s: %lu (offset=%lldms latency=%lldms)\n",
            best_server,
-           (unsigned long)best_sample.server_epoch_seconds,
+           (unsigned long)state->boot_epoch_seconds,
            (long long)best_sample.offset_ms,
            (long long)best_sample.latency_ms);
     return true;
