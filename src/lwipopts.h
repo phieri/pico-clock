@@ -4,7 +4,7 @@
 #define NO_SYS 1
 #define LWIP_SOCKET 0
 #define LWIP_TIMEVAL_PRIVATE 0
-#define MEM_SIZE (128 * 1024)
+#define MEM_SIZE (32 * 1024)
 #define MEMP_NUM_SYS_TIMEOUT 16
 #define MEMP_NUM_TCP_SEG 16
 #define MEMP_NUM_UDP_PCB 8

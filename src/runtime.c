@@ -188,6 +188,7 @@ static void refresh_clock_display(runtime_state_t *state) {
     }
     display_draw_time(&state->display, time_buffer, show_date ? date_buffer : NULL, show_date,
                       config_copy.clock_colour_set ? config_copy.clock_colour : 0xFFu);
+    printf("%s%s%s\n", time_buffer, show_date ? " " : "", show_date ? date_buffer : "");
 }
 
 static void runtime_render_view(runtime_state_t *state) {

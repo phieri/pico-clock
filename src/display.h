@@ -9,7 +9,7 @@
 #define DISPLAY_HEIGHT 600u
 
 typedef struct {
-    uint8_t pixels[DISPLAY_WIDTH * DISPLAY_HEIGHT];
+    uint8_t pixels[DISPLAY_WIDTH * DISPLAY_HEIGHT / 8u];
     uint16_t width;
     uint16_t height;
 } display_framebuffer_t;

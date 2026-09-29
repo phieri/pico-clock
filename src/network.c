@@ -346,7 +346,7 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
     err_t connect_err = udp_connect(pcb, &server_addr, NTP_SERVER_PORT);
     cyw43_arch_lwip_end();
     if (connect_err != ERR_OK) {
-        printf("udp bind failed for %s\n", server);
+        printf("udp connect failed for %s\n", server);
         cyw43_arch_lwip_begin();
         udp_remove(pcb);
         cyw43_arch_lwip_end();
@@ -402,7 +402,6 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
     }
     pbuf_free(p);
 
-    uint32_t deadline = send_ms + NTP_TIMEOUT_MS;
     while (!receive_state.received && (uint32_t)(clock_now_ms() - send_ms) < NTP_TIMEOUT_MS) {
         sleep_ms(10);
     }
