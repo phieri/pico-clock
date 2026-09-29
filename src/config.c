@@ -359,12 +359,12 @@ bool config_load(pico_config_t *config) {
         return true;
     }
 
-    if (persisted.current.version == CONFIG_VERSION) {
+    if (persisted.current.version == CONFIG_VERSION && size == (lfs_ssize_t)sizeof(persisted.current)) {
         config_load_persisted(&persisted.current, config);
         return true;
     }
 
-    if (persisted.current.version == 1u) {
+    if (persisted.current.version == 1u && size >= (lfs_ssize_t)sizeof(persisted.legacy)) {
         config_load_legacy_persisted(&persisted.legacy, config);
         return true;
     }
@@ -391,14 +391,14 @@ bool config_save(const pico_config_t *config) {
     config_store_persisted(config, &persisted);
 
     err = lfs_file_write(&g_lfs, &file, &persisted, sizeof(persisted));
-    if (err < 0) {
+    if (err != (lfs_ssize_t)sizeof(persisted)) {
         lfs_file_close(&g_lfs, &file);
         return false;
     }
 
-    lfs_file_sync(&g_lfs, &file);
-    lfs_file_close(&g_lfs, &file);
-    return true;
+    bool synced = lfs_file_sync(&g_lfs, &file) == LFS_ERR_OK;
+    bool closed = lfs_file_close(&g_lfs, &file) == LFS_ERR_OK;
+    return synced && closed;
 }
 
 void config_reset(pico_config_t *config) {

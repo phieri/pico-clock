@@ -34,7 +34,8 @@ typedef struct {
 typedef struct {
     struct tcp_pcb *pcb;
     volatile bool done;
-    char data[512];
+    bool failed;
+    char data[1024];
     size_t length;
     char request[192];
 } probe_http_t;
@@ -72,6 +73,7 @@ static void probe_http_error(void *arg, err_t error) {
     (void)error;
     probe_http_t *state = arg;
     state->pcb = NULL;
+    state->failed = true;
     state->done = true;
 }
 
@@ -79,6 +81,7 @@ static err_t probe_http_receive(void *arg, struct tcp_pcb *pcb, struct pbuf *p, 
     probe_http_t *state = arg;
     if (p == NULL || error != ERR_OK) {
         if (p != NULL) {
+            state->failed = true;
             pbuf_free(p);
         }
         return probe_http_close(state);
@@ -104,6 +107,7 @@ static err_t probe_http_receive(void *arg, struct tcp_pcb *pcb, struct pbuf *p, 
 static err_t probe_http_connected(void *arg, struct tcp_pcb *pcb, err_t error) {
     probe_http_t *state = arg;
     if (error != ERR_OK) {
+        state->failed = true;
         probe_http_close(state);
         return ERR_OK;
     }
@@ -176,7 +180,8 @@ cpr_response_t cpr_get(const char *url) {
 
     int code = 0;
     char *body = strstr(http.data, "\r\n\r\n");
-    if (!completed || body == NULL || sscanf(http.data, "HTTP/%*u.%*u %d", &code) != 1 || code < 200 || code >= 300) {
+    if (!completed || http.failed || body == NULL ||
+        sscanf(http.data, "HTTP/%*u.%*u %d", &code) != 1 || code < 200 || code >= 300) {
         return response;
     }
     body += 4;

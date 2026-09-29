@@ -113,7 +113,7 @@ static int wifi_scan_result_cb(void *env, const cyw43_ev_scan_result_t *result) 
     return 0;
 }
 
-static bool response_body_indicates_success(const cpr_response_t *response) {
+static bool response_body_indicates_success(const cpr_response_t *response, size_t endpoint_index) {
     if (response == NULL || response->text == NULL || response->text_length == 0u) {
         return false;
     }
@@ -129,7 +129,13 @@ static bool response_body_indicates_success(const cpr_response_t *response) {
     }
     normalized[normalized_length] = '\0';
 
-    return strstr(normalized, "ok") != NULL || strstr(normalized, "success") != NULL || strstr(normalized, "generate_204") != NULL;
+    if (endpoint_index == 0u) {
+        return strcmp(normalized, "ok") == 0 || strcmp(normalized, "ok\n") == 0;
+    }
+    if (endpoint_index == 1u) {
+        return strcmp(normalized, "success") == 0 || strcmp(normalized, "success\n") == 0;
+    }
+    return endpoint_index == 2u && strstr(normalized, "<title>success</title>") != NULL;
 }
 
 static bool captive_portal_check(void) {
@@ -142,7 +148,8 @@ static bool captive_portal_check(void) {
 
     for (size_t index = 0; index < (sizeof(probe_urls) / sizeof(probe_urls[0])); ++index) {
         cpr_response_t response = cpr_get(probe_urls[index]);
-        bool success = (response.status_code == 204u) || (cpr_is_successful(&response) && response_body_indicates_success(&response));
+        bool success = (index == 3u && response.status_code == 204u) ||
+                       (index != 3u && cpr_is_successful(&response) && response_body_indicates_success(&response, index));
         if (success) {
             printf("captive portal probe succeeded with HTTP %ld via %s\n", response.status_code, probe_urls[index]);
             cpr_response_free(&response);
@@ -358,7 +365,7 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
     cyw43_arch_lwip_end();
 
     uint8_t packet[48] = {0};
-    packet[0] = 0x1b;
+    packet[0] = 0x23;
 
     uint32_t send_ms = clock_now_ms();
     uint64_t local_tx_epoch_ms = 0;
@@ -368,8 +375,10 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
         local_tx_epoch_ms = (uint64_t)clock_current_epoch_seconds(state, send_ms) * 1000ULL;
     }
     ntp_epoch_ms_to_timestamp(local_tx_epoch_ms, &client_tx_seconds, &client_tx_fraction);
-    ((uint32_t *)packet)[10] = htonl(client_tx_seconds);
-    ((uint32_t *)packet)[11] = htonl(client_tx_fraction);
+    uint32_t tx_seconds_network = htonl(client_tx_seconds);
+    uint32_t tx_fraction_network = htonl(client_tx_fraction);
+    memcpy(packet + 40u, &tx_seconds_network, sizeof(tx_seconds_network));
+    memcpy(packet + 44u, &tx_fraction_network, sizeof(tx_fraction_network));
 
     struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, sizeof(packet), PBUF_RAM);
     if (!p) {
@@ -443,6 +452,10 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
     uint32_t response_orig_fraction = ntohl(ntp->orig_tm_f);
     if (response_orig_seconds != client_tx_seconds || response_orig_fraction != client_tx_fraction) {
         printf("ntp server %s returned mismatched originate timestamp\n", server);
+        return false;
+    }
+    if (ntohl(ntp->tx_tm_s) < 2208988800u || ntohl(ntp->rx_tm_s) < 2208988800u) {
+        printf("ntp server %s returned a timestamp before the Unix epoch\n", server);
         return false;
     }
 
