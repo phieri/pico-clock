@@ -16,6 +16,7 @@
 #define LWIP_WND_SCALE 0
 #define LWIP_TCP 1
 #define LWIP_UDP 1
+#define LWIP_DNS 1
 #define LWIP_ICMP 1
 #define LWIP_RAW 1
 #define LWIP_NETCONN 0
