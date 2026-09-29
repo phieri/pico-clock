@@ -38,7 +38,7 @@ uint64_t clock_current_epoch_seconds(const clock_state_t *state, uint32_t now) {
 
     uint32_t elapsed_ms = now - state->boot_ms;
     int64_t elapsed_seconds = (int64_t)(elapsed_ms / 1000u);
-    int64_t adjusted_seconds = (int64_t)state->boot_epoch_seconds + elapsed_seconds + (state->drift_ms / 1000);
+    int64_t adjusted_seconds = (int64_t)state->boot_epoch_seconds + elapsed_seconds;
     return (uint64_t)adjusted_seconds;
 }
 

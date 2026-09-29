@@ -10,8 +10,7 @@ elseif(NOT DEFINED PICO_SDK_PATH OR PICO_SDK_PATH STREQUAL "")
   set(PICO_SDK_PATH "${CMAKE_SOURCE_DIR}/.deps/pico-sdk")
 endif()
 
-set(PICO_BOARD pico2_w CACHE STRING "Pico board variant" FORCE)
-set(PICO_PLATFORM rp2350 CACHE STRING "Pico platform" FORCE)
+set(PICO_BOARD pico2_w CACHE STRING "Pico board variant")
 
 if(NOT EXISTS "${PICO_SDK_PATH}/external/pico_sdk_import.cmake")
   message(FATAL_ERROR

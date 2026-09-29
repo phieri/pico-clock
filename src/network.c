@@ -47,7 +47,7 @@ typedef struct __attribute__((packed)) {
 } ntp_packet_t;
 
 typedef struct {
-    bool received;
+    volatile bool received;
     uint8_t payload[48];
     uint16_t length;
 } ntp_receive_state_t;
@@ -56,7 +56,8 @@ typedef struct {
     bool valid;
     int64_t offset_ms;
     int64_t latency_ms;
-    uint64_t server_epoch_seconds;
+    uint64_t server_epoch_ms;
+    uint32_t receive_ms;
 } ntp_sample_t;
 
 typedef struct {
@@ -333,19 +334,28 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
     }
 
     ntp_receive_state_t receive_state = {0};
+    cyw43_arch_lwip_begin();
     struct udp_pcb *pcb = udp_new_ip_type(IP_IS_V6(&server_addr) ? IPADDR_TYPE_V6 : IPADDR_TYPE_V4);
+    cyw43_arch_lwip_end();
     if (!pcb) {
         printf("udp pcb create failed for %s\n", server);
         return false;
     }
 
-    if (udp_bind(pcb, IP_ADDR_ANY, 0) != ERR_OK) {
+    cyw43_arch_lwip_begin();
+    err_t connect_err = udp_connect(pcb, &server_addr, NTP_SERVER_PORT);
+    cyw43_arch_lwip_end();
+    if (connect_err != ERR_OK) {
         printf("udp bind failed for %s\n", server);
+        cyw43_arch_lwip_begin();
         udp_remove(pcb);
+        cyw43_arch_lwip_end();
         return false;
     }
 
+    cyw43_arch_lwip_begin();
     udp_recv(pcb, ntp_udp_recv, &receive_state);
+    cyw43_arch_lwip_end();
 
     uint8_t packet[48] = {0};
     packet[0] = 0x1b;
@@ -364,34 +374,43 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
     struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, sizeof(packet), PBUF_RAM);
     if (!p) {
         printf("pbuf alloc failed for %s\n", server);
+        cyw43_arch_lwip_begin();
         udp_remove(pcb);
+        cyw43_arch_lwip_end();
         return false;
     }
 
     if (pbuf_take(p, packet, sizeof(packet)) != ERR_OK) {
         printf("pbuf take failed for %s\n", server);
         pbuf_free(p);
+        cyw43_arch_lwip_begin();
         udp_remove(pcb);
+        cyw43_arch_lwip_end();
         return false;
     }
 
     cyw43_arch_lwip_begin();
-    err_t err = udp_sendto(pcb, p, &server_addr, NTP_SERVER_PORT);
+    err_t err = udp_send(pcb, p);
     cyw43_arch_lwip_end();
     if (err != ERR_OK) {
         printf("ntp send failed for %s\n", server);
         pbuf_free(p);
+        cyw43_arch_lwip_begin();
         udp_remove(pcb);
+        cyw43_arch_lwip_end();
         return false;
     }
+    pbuf_free(p);
 
     uint32_t deadline = send_ms + NTP_TIMEOUT_MS;
-    while (!receive_state.received && (clock_now_ms() < deadline)) {
+    while (!receive_state.received && (uint32_t)(clock_now_ms() - send_ms) < NTP_TIMEOUT_MS) {
         sleep_ms(10);
     }
 
     uint32_t receive_ms = clock_now_ms();
+    cyw43_arch_lwip_begin();
     udp_remove(pcb);
+    cyw43_arch_lwip_end();
 
     if (!receive_state.received) {
         printf("ntp receive failed for %s\n", server);
@@ -444,7 +463,8 @@ static bool ntp_query_server(clock_state_t *state, const char *server, ntp_sampl
         sample->offset_ms = 0;
     }
 
-    sample->server_epoch_seconds = server_tx_epoch_ms / 1000ULL;
+    sample->server_epoch_ms = server_tx_epoch_ms;
+    sample->receive_ms = receive_ms;
     sample->valid = true;
     return true;
 }
@@ -584,12 +604,11 @@ bool ntp_sync(clock_state_t *state, const pico_config_t *config) {
     }
 
     uint32_t now = clock_now_ms();
-    uint32_t previous_boot_ms = state->boot_ms;
-    int64_t elapsed_seconds = (int64_t)((now - previous_boot_ms) / 1000u);
     int32_t smoothed_drift_ms = (int32_t)((((int64_t)state->drift_ms * 3LL) + best_sample.offset_ms) / 4LL);
 
     state->boot_ms = now;
-    state->boot_epoch_seconds = (uint64_t)((int64_t)best_sample.server_epoch_seconds - elapsed_seconds - (smoothed_drift_ms / 1000LL));
+    state->boot_epoch_seconds = (best_sample.server_epoch_ms + (now - best_sample.receive_ms) +
+                                 (best_sample.latency_ms > 0 ? (uint64_t)best_sample.latency_ms : 0u)) / 1000ULL;
     state->last_sync_ms = now;
     state->drift_ms = smoothed_drift_ms;
     const bool previously_had_time = state->has_time;
@@ -598,7 +617,7 @@ bool ntp_sync(clock_state_t *state, const pico_config_t *config) {
 
     printf("ntp synced from %s: %lu (offset=%lldms latency=%lldms)\n",
            best_server,
-           (unsigned long)best_sample.server_epoch_seconds,
+           (unsigned long)state->boot_epoch_seconds,
            (long long)best_sample.offset_ms,
            (long long)best_sample.latency_ms);
     return true;
