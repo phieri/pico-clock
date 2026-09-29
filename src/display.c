@@ -7,7 +7,6 @@ typedef struct {
     int width;
     int height;
     int scale;
-    int x;
     int y;
 } display_layout_t;
 
@@ -130,7 +129,6 @@ static void display_prepare_layout(const char *time_buffer, const char *date_buf
     const int text_height = 7 * layout->scale;
     layout->width = text_width;
     layout->height = show_date ? text_height * 2 + 20 : text_height;
-    layout->x = (DISPLAY_WIDTH - (unsigned)text_width) / 2u;
     layout->y = (DISPLAY_HEIGHT - (unsigned)layout->height) / 2u;
 }
 
@@ -150,7 +148,7 @@ void display_draw_pixel(display_framebuffer_t *framebuffer, int x, int y, uint8_
     }
 
     size_t pixel_index = (size_t)y * framebuffer->width + (size_t)x;
-    uint8_t mask = (uint8_t)(0x80u >> (pixel_index % 8u));
+    uint8_t mask = (uint8_t)(1u << (pixel_index % 8u));
     if (value != 0u) {
         framebuffer->pixels[pixel_index / 8u] |= mask;
     } else {
@@ -200,8 +198,8 @@ void display_draw_startup(display_framebuffer_t *framebuffer, uint8_t colour) {
     const int title_x = (DISPLAY_WIDTH - (unsigned)title_width) / 2u;
     const int subtitle_x = (DISPLAY_WIDTH - (unsigned)subtitle_width) / 2u;
 
-    display_draw_text(framebuffer, title_x, 160, title, title_scale, colour);
-    display_draw_text(framebuffer, subtitle_x, 330, subtitle, subtitle_scale, colour);
+    display_draw_text(framebuffer, title_x, 160, title, title_scale, 0u);
+    display_draw_text(framebuffer, subtitle_x, 330, subtitle, subtitle_scale, 0u);
 }
 
 void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buffer, const char *date_buffer, bool show_date, uint8_t colour) {
@@ -215,13 +213,13 @@ void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buff
     display_layout_t layout;
     display_prepare_layout(time_buffer, date_buffer, show_date, &layout);
 
-    const int time_x = layout.x + (((int)strlen(time_buffer) * 6u - 1u) * layout.scale - (int)(time_length * 6u - 1u) * layout.scale) / 2;
+    const int time_x = (DISPLAY_WIDTH - (time_length * 6u - 1u) * (unsigned)layout.scale) / 2u;
     const int time_y = layout.y;
 
     display_draw_text(framebuffer, time_x, time_y, time_buffer, layout.scale, colour);
     if (show_date && date_buffer != NULL && strlen(date_buffer) != 0u) {
         const int date_width = (int)((strlen(date_buffer) * 6u - 1u) * (unsigned)layout.scale);
-        const int date_x = layout.x + (((int)strlen(time_buffer) * 6u - 1u) * layout.scale - date_width) / 2;
+        const int date_x = (DISPLAY_WIDTH - date_width) / 2;
         const int date_y = time_y + 7 * layout.scale + 20;
         display_draw_text(framebuffer, date_x, date_y, date_buffer, layout.scale, colour);
     }

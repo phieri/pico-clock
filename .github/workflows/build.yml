@@ -29,7 +29,7 @@ jobs:
 
     strategy:
       matrix:
-        board: [pico_w, pico2_w]
+        board: [pico2_w]
 
     steps:
       - name: Checkout repository

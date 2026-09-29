@@ -15,6 +15,7 @@
 typedef struct {
     clock_state_t clock;
     display_framebuffer_t display;
+    display_framebuffer_t display_back;
     pico_config_t config;
     char serial_buffer[RUNTIME_SERIAL_BUFFER_SIZE];
     size_t serial_length;
@@ -22,7 +23,7 @@ typedef struct {
     bool config_dirty;
     bool startup_config_window_active;
     uint32_t startup_config_deadline_ms;
-    spin_lock_t state_lock;
+    spin_lock_t *state_lock;
 } runtime_state_t;
 
 void runtime_state_init(runtime_state_t *state);

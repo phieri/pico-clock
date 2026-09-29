@@ -6,6 +6,8 @@ DEPS_DIR="$ROOT_DIR/.deps"
 PICO_SDK_VERSION="${PICO_SDK_VERSION:-2.3.0}"
 PICO_SDK_DIR="${PICO_SDK_PATH:-$DEPS_DIR/pico-sdk}"
 LITTLEFS_DIR="$DEPS_DIR/littlefs"
+PICODVI_DIR="$DEPS_DIR/PicoDVI"
+PICODVI_COMMIT="dccd738bfa9af75badcb32acde3e41bd6a3fa30a"
 mkdir -p "$DEPS_DIR"
 
 mkdir -p "$(dirname "$PICO_SDK_DIR")"
@@ -24,3 +26,9 @@ if [ ! -d "$LITTLEFS_DIR/.git" ]; then
 else
   git -C "$LITTLEFS_DIR" pull --ff-only
 fi
+
+if [ ! -d "$PICODVI_DIR/.git" ]; then
+  git clone https://github.com/Wren6991/PicoDVI.git "$PICODVI_DIR"
+fi
+git -C "$PICODVI_DIR" fetch origin "$PICODVI_COMMIT"
+git -C "$PICODVI_DIR" checkout --detach "$PICODVI_COMMIT"

@@ -16,7 +16,7 @@ Then bootstrap the Pico SDK and local dependencies:
 ```
 
 !!! note
-    The project expects the Pico SDK under `.deps/pico-sdk` and the littlefs sources under `.deps/littlefs`.
+    The project expects the Pico SDK under `.deps/pico-sdk`, littlefs under `.deps/littlefs`, and PicoDVI under `.deps/PicoDVI`.
 
 ## 2. Configure the firmware build
 
@@ -26,11 +26,7 @@ Use the default board target for a Pico 2 W build:
 cmake -S . -B build -DPICO_SDK_PATH=$PWD/.deps/pico-sdk -DPICO_BOARD=pico2_w
 ```
 
-To target a Pico W instead:
-
-```bash
-cmake -S . -B build -DPICO_SDK_PATH=$PWD/.deps/pico-sdk -DPICO_BOARD=pico_w
-```
+Only Pico 2 W is supported for the Waveshare PICO-DVI-7inch.
 
 ## 3. Build the firmware
 
@@ -45,7 +41,7 @@ The generated build outputs are written to `build/` as `.uf2`, `.elf`, `.bin`, a
 1. Put the Pico into USB bootloader mode.
 2. Copy the generated `.uf2` image to the mounted drive.
 3. Open the serial console at the configured baud rate.
-4. Connect a USB serial terminal within 30 seconds of boot to configure Wi‑Fi and the hostname. The time is printed to USB serial once per second after synchronization. No physical display driver is included yet; the in-memory framebuffer requires a panel-specific driver and wiring.
+4. Seat the Pico 2 W in the Waveshare PICO-DVI-7inch carrier and power the display according to its instructions. Connect a USB serial terminal within 30 seconds of boot to configure Wi‑Fi and the hostname. The display shows the clock after synchronization; USB serial also reports the time.
 
 ## 5. Configure the device over serial
 

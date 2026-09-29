@@ -5,8 +5,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define DISPLAY_WIDTH 1024u
-#define DISPLAY_HEIGHT 600u
+#define DISPLAY_WIDTH 800u
+#define DISPLAY_HEIGHT 480u
 
 typedef struct {
     uint8_t pixels[DISPLAY_WIDTH * DISPLAY_HEIGHT / 8u];
