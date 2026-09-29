@@ -10,8 +10,8 @@ A Raspberry Pi Pico W / Pico 2 W firmware project for a network clock. The firmw
 - Builds with CMake and the Raspberry Pi Pico SDK.
 - Targets the Pico W / Pico 2 W family via the Pico SDK's `pico_cyw43_arch` networking stack.
 - Connects to open Wi-Fi networks and skips captive-portal probing for password-protected networks. When probing an open network, it tries a small set of common captive-portal endpoints to bypass portal-style redirects.
-- Prefers IPv6 NTP resolution with IPv4 fallback and retries against multiple servers.
-- Tracks boot-time drift and subsequent time corrections.
+- Tries the configured NTP server addresses (IPv6 then IPv4 by default).
+- Tracks synchronization offsets and latency.
 - Renders the current time (and optionally the date) in a 1024×600 monochrome, packed framebuffer.
 - Moves Wi-Fi connection and NTP synchronization work onto the Pico's second core so the main loop stays focused on display updates and serial handling.
 

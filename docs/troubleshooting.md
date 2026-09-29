@@ -30,11 +30,10 @@ git -C .deps clone --depth 1 https://github.com/littlefs-project/littlefs.git li
 - Check that the device has a valid gateway and DNS path.
 - Look at the serial logs for drift and latency values; they are reported as part of the runtime loop.
 
-## Display shows the wrong behaviour
+## No time appears on the display
 
-- Use `date on|auto|off` to toggle the date visibility.
-- Check that the hostname is set correctly.
-- Confirm the framebuffer is updating after the board boots.
+- Physical display output is not implemented: the framebuffer is only held in memory. A panel-specific driver and wiring must be added before it can drive a screen.
+- For now, read the synchronized time on the USB serial console. Use `date on|auto|off` during the startup configuration window to change date visibility.
 
 ## Useful commands
 

@@ -129,7 +129,7 @@ static void display_prepare_layout(const char *time_buffer, const char *date_buf
     const int text_width = (int)((longest_length * 6u - 1u) * (unsigned)layout->scale);
     const int text_height = 7 * layout->scale;
     layout->width = text_width;
-    layout->height = (show_date ? (text_height * 2u + 20u) : text_height);
+    layout->height = show_date ? text_height * 2 + 20 : text_height;
     layout->x = (DISPLAY_WIDTH - (unsigned)text_width) / 2u;
     layout->y = (DISPLAY_HEIGHT - (unsigned)layout->height) / 2u;
 }
