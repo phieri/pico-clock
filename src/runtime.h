@@ -23,7 +23,7 @@ typedef struct {
     bool config_dirty;
     bool startup_config_window_active;
     uint32_t startup_config_deadline_ms;
-    spin_lock_t state_lock;
+    spin_lock_t *state_lock;
 } runtime_state_t;
 
 void runtime_state_init(runtime_state_t *state);

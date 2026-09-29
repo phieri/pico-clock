@@ -1,6 +1,6 @@
 # Pico Clock
 
-A compact Raspberry Pi Pico W / Pico 2 W network clock with a bright display, automatic Wi‑Fi setup, and resilient time sync.
+A Raspberry Pi Pico 2 W network clock for the Waveshare PICO-DVI-7inch, with serial Wi‑Fi setup and resilient time sync.
 
 ![Pico Clock display preview](pico-clock-screenshot.png)
 

@@ -2,9 +2,9 @@
 
 ## Build problems
 
-### Missing Pico SDK or LittleFS sources
+### Missing Pico SDK, LittleFS, or PicoDVI sources
 
-If configuration fails because the Pico SDK or `lfs.c` is absent, prepare the project dependencies first:
+If configuration fails because the Pico SDK, `lfs.c`, or PicoDVI is absent, prepare the project dependencies first:
 
 ```bash
 ./scripts/bootstrap-pico.sh
@@ -32,8 +32,8 @@ git -C .deps clone --depth 1 https://github.com/littlefs-project/littlefs.git li
 
 ## No time appears on the display
 
-- Physical display output is not implemented: the framebuffer is only held in memory. A panel-specific driver and wiring must be added before it can drive a screen.
-- For now, read the synchronized time on the USB serial console. Use `date on|auto|off` during the startup configuration window to change date visibility.
+- Confirm the Pico 2 W is seated in the Waveshare PICO-DVI-7inch carrier and the screen has its required power.
+- Check USB serial output for Wi‑Fi and NTP synchronization. Use `date on|auto|off` during the startup configuration window to change date visibility.
 
 ## Useful commands
 

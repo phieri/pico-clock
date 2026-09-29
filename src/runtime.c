@@ -248,17 +248,17 @@ static bool runtime_sync_time_if_due(runtime_state_t *state) {
     return false;
 }
 
-static void runtime_service_network(runtime_state_t *state) {
+static bool runtime_service_network(runtime_state_t *state) {
     if (state == NULL) {
-        return;
+        return false;
     }
 
     if (!runtime_reconnect_network(state)) {
-        sleep_ms(5000);
-        return;
+        return false;
     }
 
     runtime_sync_time_if_due(state);
+    return true;
 }
 
 void runtime_state_init(runtime_state_t *state) {
@@ -268,7 +268,7 @@ void runtime_state_init(runtime_state_t *state) {
 
     memset(state, 0, sizeof(*state));
     stdio_init_all();
-    spin_lock_init(&state->state_lock);
+    state->state_lock = spin_lock_init(spin_lock_claim_unused(true));
     clock_init(&state->clock);
     display_init(&state->display);
     display_init(&state->display_back);
@@ -291,6 +291,7 @@ void runtime_run(runtime_state_t *state) {
     display_framebuffer_t *back = &state->display_back;
     bool network_started = false;
     uint32_t last_network_service = 0;
+    uint32_t network_service_interval = 1000u;
     while (true) {
         runtime_handle_serial_input(state);
         if (!network_started && !runtime_update_startup_config_window(state, clock_now_ms())) {
@@ -299,9 +300,9 @@ void runtime_run(runtime_state_t *state) {
         runtime_render_view(state, back);
         display_output_present(back);
         back = back == &state->display ? &state->display_back : &state->display;
-        if (network_started && (clock_now_ms() - last_network_service >= 1000u || last_network_service == 0u)) {
+        if (network_started && (clock_now_ms() - last_network_service >= network_service_interval || last_network_service == 0u)) {
             last_network_service = clock_now_ms();
-            runtime_service_network(state);
+            network_service_interval = runtime_service_network(state) ? 1000u : 5000u;
         }
         sleep_ms(network_started ? CLOCK_REFRESH_INTERVAL_MS : 10u);
     }
