@@ -11,6 +11,9 @@ elseif(NOT DEFINED PICO_SDK_PATH OR PICO_SDK_PATH STREQUAL "")
 endif()
 
 set(PICO_BOARD pico2_w CACHE STRING "Pico board variant")
+if(NOT PICO_BOARD STREQUAL "pico2_w")
+  message(FATAL_ERROR "The Waveshare PICO-DVI-7inch firmware requires PICO_BOARD=pico2_w")
+endif()
 
 if(NOT EXISTS "${PICO_SDK_PATH}/external/pico_sdk_import.cmake")
   message(FATAL_ERROR
@@ -24,6 +27,11 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 pico_sdk_init()
 
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/.deps/PicoDVI/software/libdvi/CMakeLists.txt")
+  message(FATAL_ERROR "PicoDVI is missing. Run scripts/bootstrap-pico.sh first.")
+endif()
+add_subdirectory(.deps/PicoDVI/software/libdvi)
+
 add_library(littlefs STATIC
   ${CMAKE_SOURCE_DIR}/.deps/littlefs/lfs.c
   ${CMAKE_SOURCE_DIR}/.deps/littlefs/lfs_util.c
@@ -34,6 +42,7 @@ add_executable(pico_clock
   src/main.c
   src/clock.c
   src/display.c
+  src/display_output.c
   src/cpr_compat.c
   src/network.c
   src/config.c
@@ -49,6 +58,9 @@ target_include_directories(pico_clock PRIVATE
 target_compile_definitions(pico_clock PRIVATE
   PICO_CYW43_ARCH_HEADER=pico/cyw43_arch/arch_threadsafe_background.h
   LWIP_NETIF_HOSTNAME=1
+  DVI_VERTICAL_REPEAT=1
+  DVI_N_TMDS_BUFFERS=3
+  DVI_MONOCHROME_TMDS=1
 )
 
 target_link_libraries(pico_clock
@@ -58,6 +70,7 @@ target_link_libraries(pico_clock
   pico_cyw43_arch_lwip_threadsafe_background
   pico_lwip_nosys
   hardware_flash
+  libdvi
   littlefs
 )
 

@@ -150,7 +150,7 @@ void display_draw_pixel(display_framebuffer_t *framebuffer, int x, int y, uint8_
     }
 
     size_t pixel_index = (size_t)y * framebuffer->width + (size_t)x;
-    uint8_t mask = (uint8_t)(0x80u >> (pixel_index % 8u));
+    uint8_t mask = (uint8_t)(1u << (pixel_index % 8u));
     if (value != 0u) {
         framebuffer->pixels[pixel_index / 8u] |= mask;
     } else {

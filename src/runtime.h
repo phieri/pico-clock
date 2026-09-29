@@ -15,6 +15,7 @@
 typedef struct {
     clock_state_t clock;
     display_framebuffer_t display;
+    display_framebuffer_t display_back;
     pico_config_t config;
     char serial_buffer[RUNTIME_SERIAL_BUFFER_SIZE];
     size_t serial_length;

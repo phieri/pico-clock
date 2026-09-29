@@ -3,14 +3,12 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "pico/multicore.h"
 #include "pico/stdlib.h"
 
+#include "display_output.h"
 #include "network.h"
 
 #define CLOCK_REFRESH_INTERVAL_MS 1000u
-
-static runtime_state_t *s_runtime_state = NULL;
 
 static runtime_state_t *runtime_state_for_lock(const runtime_state_t *state) {
     return (runtime_state_t *)state;
@@ -168,7 +166,7 @@ static bool runtime_handle_serial_input(runtime_state_t *state) {
     return false;
 }
 
-static void refresh_clock_display(runtime_state_t *state) {
+static void refresh_clock_display(runtime_state_t *state, display_framebuffer_t *framebuffer) {
     uint32_t now = clock_now_ms();
     clock_state_t clock_copy = runtime_read_clock(state);
     uint64_t epoch = clock_current_epoch_seconds(&clock_copy, now);
@@ -186,18 +184,18 @@ static void refresh_clock_display(runtime_state_t *state) {
     if (show_date) {
         clock_format_date(epoch, timezone_offset_seconds, date_buffer, sizeof(date_buffer));
     }
-    display_draw_time(&state->display, time_buffer, show_date ? date_buffer : NULL, show_date,
+    display_draw_time(framebuffer, time_buffer, show_date ? date_buffer : NULL, show_date,
                       config_copy.clock_colour_set ? config_copy.clock_colour : 0xFFu);
     printf("%s%s%s\n", time_buffer, show_date ? " " : "", show_date ? date_buffer : "");
 }
 
-static void runtime_render_view(runtime_state_t *state) {
+static void runtime_render_view(runtime_state_t *state, display_framebuffer_t *framebuffer) {
     clock_state_t clock_copy = runtime_read_clock(state);
     if (!clock_copy.has_time) {
         pico_config_t config_copy = runtime_read_config(state);
-        display_draw_startup(&state->display, config_copy.clock_colour_set ? config_copy.clock_colour : 0xFFu);
+        display_draw_startup(framebuffer, config_copy.clock_colour_set ? config_copy.clock_colour : 0xFFu);
     } else {
-        refresh_clock_display(state);
+        refresh_clock_display(state, framebuffer);
     }
 }
 
@@ -263,18 +261,6 @@ static void runtime_service_network(runtime_state_t *state) {
     runtime_sync_time_if_due(state);
 }
 
-static void core1_network_worker(void) {
-    runtime_state_t *state = s_runtime_state;
-    if (state == NULL) {
-        return;
-    }
-
-    while (true) {
-        runtime_service_network(state);
-        sleep_ms(1000);
-    }
-}
-
 void runtime_state_init(runtime_state_t *state) {
     if (state == NULL) {
         return;
@@ -285,6 +271,7 @@ void runtime_state_init(runtime_state_t *state) {
     spin_lock_init(&state->state_lock);
     clock_init(&state->clock);
     display_init(&state->display);
+    display_init(&state->display_back);
     config_init(&state->config);
     state->startup_config_window_active = true;
     state->startup_config_deadline_ms = clock_now_ms() + STARTUP_CONFIG_DELAY_MS;
@@ -300,16 +287,22 @@ void runtime_run(runtime_state_t *state) {
         return;
     }
 
+    display_output_start(&state->display);
+    display_framebuffer_t *back = &state->display_back;
     bool network_started = false;
+    uint32_t last_network_service = 0;
     while (true) {
         runtime_handle_serial_input(state);
         if (!network_started && !runtime_update_startup_config_window(state, clock_now_ms())) {
-            s_runtime_state = state;
-            multicore_reset_core1();
-            multicore_launch_core1(core1_network_worker);
             network_started = true;
         }
-        runtime_render_view(state);
+        runtime_render_view(state, back);
+        display_output_present(back);
+        back = back == &state->display ? &state->display_back : &state->display;
+        if (network_started && (clock_now_ms() - last_network_service >= 1000u || last_network_service == 0u)) {
+            last_network_service = clock_now_ms();
+            runtime_service_network(state);
+        }
         sleep_ms(network_started ? CLOCK_REFRESH_INTERVAL_MS : 10u);
     }
 }
