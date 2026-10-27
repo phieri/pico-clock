@@ -5,8 +5,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#if defined(PICO_CLOCK_DISPLAY_SPI)
+#define DISPLAY_WIDTH 320u
+#define DISPLAY_HEIGHT 240u
+#else
 #define DISPLAY_WIDTH 800u
 #define DISPLAY_HEIGHT 480u
+#endif
 
 typedef struct {
     uint8_t pixels[DISPLAY_WIDTH * DISPLAY_HEIGHT / 8u];

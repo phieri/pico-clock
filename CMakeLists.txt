@@ -12,7 +12,19 @@ endif()
 
 set(PICO_BOARD pico2_w CACHE STRING "Pico board variant")
 if(NOT PICO_BOARD STREQUAL "pico2_w")
-  message(FATAL_ERROR "The Waveshare PICO-DVI-7inch firmware requires PICO_BOARD=pico2_w")
+  message(FATAL_ERROR "The pico-clock firmware currently requires PICO_BOARD=pico2_w")
+endif()
+
+set(PICO_CLOCK_DISPLAY "dvi" CACHE STRING "Display output variant (dvi or spi)")
+set_property(CACHE PICO_CLOCK_DISPLAY PROPERTY STRINGS dvi spi)
+string(TOLOWER "${PICO_CLOCK_DISPLAY}" PICO_CLOCK_DISPLAY)
+
+if(PICO_CLOCK_DISPLAY STREQUAL "dvi")
+  set(DISPLAY_OUTPUT_SOURCE src/display_output.c)
+elseif(PICO_CLOCK_DISPLAY STREQUAL "spi")
+  set(DISPLAY_OUTPUT_SOURCE src/display_output_spi.c)
+else()
+  message(FATAL_ERROR "PICO_CLOCK_DISPLAY must be either dvi or spi")
 endif()
 
 if(NOT EXISTS "${PICO_SDK_PATH}/external/pico_sdk_import.cmake")
@@ -27,10 +39,12 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 pico_sdk_init()
 
-if(NOT EXISTS "${CMAKE_SOURCE_DIR}/.deps/PicoDVI/software/libdvi/CMakeLists.txt")
-  message(FATAL_ERROR "PicoDVI is missing. Run scripts/bootstrap-pico.sh first.")
+if(PICO_CLOCK_DISPLAY STREQUAL "dvi")
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/.deps/PicoDVI/software/libdvi/CMakeLists.txt")
+    message(FATAL_ERROR "PicoDVI is missing. Run scripts/bootstrap-pico.sh first.")
+  endif()
+  add_subdirectory(.deps/PicoDVI/software/libdvi)
 endif()
-add_subdirectory(.deps/PicoDVI/software/libdvi)
 
 add_library(littlefs STATIC
   ${CMAKE_SOURCE_DIR}/.deps/littlefs/lfs.c
@@ -42,7 +56,7 @@ add_executable(pico_clock
   src/main.c
   src/clock.c
   src/display.c
-  src/display_output.c
+  ${DISPLAY_OUTPUT_SOURCE}
   src/cpr_compat.c
   src/network.c
   src/config.c
@@ -58,10 +72,17 @@ target_include_directories(pico_clock PRIVATE
 target_compile_definitions(pico_clock PRIVATE
   PICO_CYW43_ARCH_HEADER=pico/cyw43_arch/arch_threadsafe_background.h
   LWIP_NETIF_HOSTNAME=1
-  DVI_VERTICAL_REPEAT=1
-  DVI_N_TMDS_BUFFERS=3
-  DVI_MONOCHROME_TMDS=1
 )
+
+if(PICO_CLOCK_DISPLAY STREQUAL "dvi")
+  target_compile_definitions(pico_clock PRIVATE
+    DVI_VERTICAL_REPEAT=1
+    DVI_N_TMDS_BUFFERS=3
+    DVI_MONOCHROME_TMDS=1
+  )
+else()
+  target_compile_definitions(pico_clock PRIVATE PICO_CLOCK_DISPLAY_SPI=1)
+endif()
 
 target_link_libraries(pico_clock
   pico_stdlib
@@ -70,9 +91,14 @@ target_link_libraries(pico_clock
   pico_cyw43_arch_lwip_threadsafe_background
   pico_lwip_nosys
   hardware_flash
-  libdvi
   littlefs
 )
+
+if(PICO_CLOCK_DISPLAY STREQUAL "dvi")
+  target_link_libraries(pico_clock libdvi)
+else()
+  target_link_libraries(pico_clock hardware_spi)
+endif()
 
 pico_enable_stdio_usb(pico_clock 1)
 pico_enable_stdio_uart(pico_clock 0)

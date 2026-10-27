@@ -22,7 +22,7 @@ env:
 
 jobs:
   build-pico-clock:
-    name: Build pico-clock Firmware (${{ matrix.board }})
+    name: Build pico-clock Firmware (${{ matrix.board }}, ${{ matrix.display }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -30,6 +30,7 @@ jobs:
     strategy:
       matrix:
         board: [pico2_w]
+        display: [dvi, spi]
 
     steps:
       - name: Checkout repository
@@ -67,7 +68,7 @@ jobs:
 
       - name: Configure CMake
         working-directory: build
-        run: cmake .. -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=${{ matrix.board }}
+        run: cmake .. -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=${{ matrix.board }} -DPICO_CLOCK_DISPLAY=${{ matrix.display }}
 
       - name: Build firmware
         working-directory: build
@@ -82,7 +83,7 @@ jobs:
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: pico-clock-firmware-${{ matrix.board }}
+          name: pico-clock-firmware-${{ matrix.board }}-${{ matrix.display }}
           path: |
             build/*.uf2
             build/*.elf

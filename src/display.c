@@ -187,19 +187,22 @@ static void display_draw_background(display_framebuffer_t *framebuffer) {
 
 void display_draw_startup(display_framebuffer_t *framebuffer, uint8_t colour) {
     display_draw_background(framebuffer);
-    display_draw_rect(framebuffer, 40, 40, DISPLAY_WIDTH - 80u, DISPLAY_HEIGHT - 80u, colour);
+    const int margin_x = DISPLAY_WIDTH / 20u;
+    const int margin_y = DISPLAY_HEIGHT / 12u;
+    display_draw_rect(framebuffer, margin_x, margin_y, DISPLAY_WIDTH - 2 * margin_x,
+                      DISPLAY_HEIGHT - 2 * margin_y, colour);
 
     const char *title = "PICO CLOCK";
     const char *subtitle = "SYNCING";
-    const int title_scale = 4;
-    const int subtitle_scale = 2;
+    const int title_scale = DISPLAY_WIDTH >= 640u ? 4 : 2;
+    const int subtitle_scale = title_scale / 2;
     const int title_width = display_measure_text_width(title, title_scale);
     const int subtitle_width = display_measure_text_width(subtitle, subtitle_scale);
     const int title_x = (DISPLAY_WIDTH - (unsigned)title_width) / 2u;
     const int subtitle_x = (DISPLAY_WIDTH - (unsigned)subtitle_width) / 2u;
 
-    display_draw_text(framebuffer, title_x, 160, title, title_scale, 0u);
-    display_draw_text(framebuffer, subtitle_x, 330, subtitle, subtitle_scale, 0u);
+    display_draw_text(framebuffer, title_x, DISPLAY_HEIGHT / 3u, title, title_scale, 0u);
+    display_draw_text(framebuffer, subtitle_x, DISPLAY_HEIGHT * 11u / 16u, subtitle, subtitle_scale, 0u);
 }
 
 void display_draw_time(display_framebuffer_t *framebuffer, const char *time_buffer, const char *date_buffer, bool show_date, uint8_t colour) {
