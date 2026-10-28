@@ -19,6 +19,10 @@ uint32_t clock_now_ms(void) {
     return (uint32_t)to_ms_since_boot(get_absolute_time());
 }
 
+bool clock_deadline_reached(uint32_t now_ms, uint32_t deadline_ms) {
+    return (uint32_t)(now_ms - deadline_ms) < (UINT32_MAX / 2u + 1u);
+}
+
 uint32_t clock_next_sync_interval_ms(uint32_t current_interval_ms) {
     if (current_interval_ms == 0u) {
         return NTP_SYNC_INTERVAL_INITIAL_MS;

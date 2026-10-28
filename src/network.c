@@ -532,7 +532,7 @@ static bool wifi_connect_via_scan(void) {
     }
 
     uint32_t scan_deadline = clock_now_ms() + WIFI_CONNECT_TIMEOUT_MS;
-    while (!scan_state.scan_complete && (clock_now_ms() < scan_deadline)) {
+    while (!scan_state.scan_complete && !clock_deadline_reached(clock_now_ms(), scan_deadline)) {
         sleep_ms(50);
     }
 
