@@ -90,7 +90,7 @@ static bool runtime_update_startup_config_window(runtime_state_t *state, uint32_
     }
 
     uint32_t irq_state = runtime_lock_state(state);
-    if (state->startup_config_window_active && now >= state->startup_config_deadline_ms) {
+    if (state->startup_config_window_active && clock_deadline_reached(now, state->startup_config_deadline_ms)) {
         state->startup_config_window_active = false;
         printf("serial configuration window closed; beginning time acquisition\n");
     }
